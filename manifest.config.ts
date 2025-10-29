@@ -17,6 +17,10 @@ export default defineManifest({
   permissions: [
     'sidePanel',
     'contentSettings',
+    'storage',
+  ],
+  host_permissions: [
+    'https://*/*'
   ],
   content_scripts: [{
     js: ['src/content/main.tsx'],
