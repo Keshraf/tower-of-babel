@@ -4,7 +4,7 @@ interface TranslationResult {
 }
 
 /**
- * Service for translating words using Translator API
+ * Service for translating text using Translator API
  */
 class TranslatorService {
   private translator: any = null;
@@ -89,59 +89,28 @@ class TranslatorService {
   }
 
   /**
-   * Translate a single word in context
+   * Translate text (can be sentence, paragraph, or batch)
    */
-  async translateWord(
-    word: string,
-    context: string
-  ): Promise<TranslationResult> {
+  async translateText(text: string): Promise<string> {
     if (!this.translator) {
       throw new Error("Translator API not initialized");
     }
 
     try {
-      // Translate the word
-      const translatedWord = await this.translator.translate(word);
+      console.log(`Translating text (${text.length} chars)...`);
+      const translation = await this.translator.translate(text);
 
-      return {
-        originalWord: word,
-        translatedWord: translatedWord.trim(),
-      };
+      if (!translation || translation.trim().length === 0) {
+        console.warn("Empty translation received");
+        return "";
+      }
+
+      console.log(`Translation received (${translation.length} chars)`);
+      return translation.trim();
     } catch (error) {
-      console.error(`Error translating word "${word}":`, error);
+      console.error("Error translating text:", error);
       throw error;
     }
-  }
-
-  /**
-   * Translate multiple words in context (batched)
-   * Note: Translator API processes sequentially, but we batch for efficiency
-   */
-  async translateWords(
-    words: string[],
-    context: string
-  ): Promise<Map<string, TranslationResult>> {
-    const translations = new Map<string, TranslationResult>();
-
-    if (words.length === 0) {
-      return translations;
-    }
-
-    console.log(`Translating ${words.length} words:`, words);
-
-    // Process translations sequentially (Translator API requirement)
-    for (const word of words) {
-      try {
-        const result = await this.translateWord(word, context);
-        translations.set(word.toLowerCase(), result);
-      } catch (error) {
-        console.error(`Failed to translate "${word}":`, error);
-        // Continue with other words even if one fails
-      }
-    }
-
-    console.log(`Successfully translated ${translations.size} words`);
-    return translations;
   }
 
   /**

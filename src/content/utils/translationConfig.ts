@@ -10,9 +10,9 @@ export interface TranslationConfig {
 // Density mapping: determines how many words to translate
 // Format: 1 word out of X words
 export const DENSITY_RATIOS: Record<DensityLevel, number> = {
-  low: 50, // 1 out of 50 words
-  medium: 25, // 1 out of 25 words
-  high: 20, // 1 out of 20 words
+  low: 20, // 1 out of 20 words
+  medium: 10, // 1 out of 15 words
+  high: 5, // 1 out of 10 words
 };
 
 // Default configuration

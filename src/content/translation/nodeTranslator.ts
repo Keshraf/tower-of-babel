@@ -1,6 +1,7 @@
 import { translationService } from "../services/TranslationService";
-import { extractSentences, type SentenceInfo } from "../utils/textExtraction";
+import { type SentenceBatch, type SentenceInfo } from "../utils/textExtraction";
 import { translationState } from "./translationState";
+import type { WordPair } from "../services/PromptService";
 
 interface WordData {
   english: string;
@@ -10,11 +11,6 @@ interface WordData {
 interface TooltipHandler {
   show: (data: WordData, x: number, y: number) => void;
   hide: () => void;
-}
-
-interface TranslationResult {
-  originalWord: string;
-  translatedWord: string;
 }
 
 // Store tooltip handler so DOM event handlers can access it
@@ -28,12 +24,12 @@ export function setTooltipHandler(handler: TooltipHandler): void {
 }
 
 /**
- * Translate and replace text nodes in the DOM
+ * NEW: Translate and replace sentence batches using regex
  */
-export async function translateAndReplaceNodes(
-  textNodes: Text[]
+export async function translateAndReplaceBatches(
+  batches: SentenceBatch[]
 ): Promise<void> {
-  console.log(`Translating and replacing ${textNodes.length} text nodes`);
+  console.log(`Processing ${batches.length} sentence batches`);
 
   if (!translationService.isInitialized()) {
     console.warn("Translation service not initialized, skipping translation");
@@ -42,7 +38,7 @@ export async function translateAndReplaceNodes(
 
   // Check if translation is still active
   if (!translationState.shouldContinue()) {
-    console.log("Translation cancelled, skipping node processing");
+    console.log("Translation cancelled, skipping batch processing");
     return;
   }
 
@@ -50,153 +46,207 @@ export async function translateAndReplaceNodes(
   const translatorService = translationService.getTranslatorService();
   const config = translationService.getConfig();
 
-  // Extract sentences from text nodes
-  const sentences = extractSentences(textNodes);
-  console.log(`Extracted ${sentences.length} sentences`);
-
-  // Process each sentence
-  for (const sentenceInfo of sentences) {
-    // Check if we should continue before each sentence
+  // Process each batch
+  for (const batch of batches) {
+    // Check if we should continue before each batch
     if (!translationState.shouldContinue()) {
       console.log("Translation cancelled mid-processing");
       return;
     }
 
     try {
-      await processSentence(
-        sentenceInfo,
-        promptService,
-        translatorService,
-        config
-      );
+      await processBatch(batch, promptService, translatorService, config);
     } catch (error) {
       // Check if it was an abort
       if (error instanceof Error && error.name === "AbortError") {
-        console.log("Sentence processing aborted");
+        console.log("Batch processing aborted");
         return;
       }
-      console.error("Error processing sentence:", error);
+      console.error("Error processing batch:", error);
+      // Continue with next batch even if one fails
     }
   }
 }
 
 /**
- * Process a single sentence: select words and translate them
+ * Process a single batch: translate and select words
  */
-async function processSentence(
-  sentenceInfo: SentenceInfo,
+async function processBatch(
+  batch: SentenceBatch,
   promptService: any,
   translatorService: any,
   config: any
 ): Promise<void> {
-  const { text, node } = sentenceInfo;
+  const { combinedText, sentences } = batch;
 
-  console.log(`Processing sentence: "${text.substring(0, 100)}..."`);
+  console.log(
+    `Processing batch with ${sentences.length} sentences (${combinedText.length} chars)...`
+  );
 
   // Check if still active
   if (!translationState.shouldContinue()) {
     throw new DOMException("Translation aborted", "AbortError");
   }
 
-  // Step 1: Use Prompt API to select words to translate
-  const wordsToTranslate = await promptService.selectWordsToTranslate(
-    text,
-    config
-  );
+  // Step 1: Translate entire batch
+  const translatedText = await translatorService.translateText(combinedText);
 
-  if (wordsToTranslate.length === 0) {
-    console.log("No words selected for translation in this sentence");
+  if (!translatedText || translatedText.trim().length === 0) {
+    console.warn("Empty translation, skipping batch");
     return;
   }
 
-  console.log(`Selected ${wordsToTranslate.length} words:`, wordsToTranslate);
+  console.log("Translation complete, selecting words...");
 
-  // Check again before translation
+  // Check again before word selection
   if (!translationState.shouldContinue()) {
     throw new DOMException("Translation aborted", "AbortError");
   }
 
-  // Step 2: Use Translator API to translate selected words
-  const translations = await translatorService.translateWords(
-    wordsToTranslate,
-    text
+  // Step 2: Use Prompt API to select words (no positions needed)
+  const wordPairs = await promptService.selectWordsFromBatch(
+    combinedText,
+    translatedText,
+    config
   );
 
-  if (translations.size === 0) {
-    console.log("No translations returned");
+  if (wordPairs.length === 0) {
+    console.log("No words selected for this batch");
     return;
   }
+
+  console.log(`Selected ${wordPairs.length} word pairs for translation`);
 
   // Check one more time before DOM manipulation
   if (!translationState.shouldContinue()) {
     throw new DOMException("Translation aborted", "AbortError");
   }
 
-  // Step 3: Replace words in the DOM
-  replaceWordsInNode(node, translations);
+  // Step 3: For each sentence in batch, replace words using regex
+  sentences.forEach((sentence) => {
+    replaceWordsInSentence(sentence, wordPairs);
+  });
 }
 
 /**
- * Replace translated words in the DOM node
+ * Replace words in a sentence using regex (finds all occurrences)
  */
-function replaceWordsInNode(
-  node: Text,
-  translations: Map<string, TranslationResult>
+function replaceWordsInSentence(
+  sentence: SentenceInfo,
+  wordPairs: WordPair[]
 ): void {
-  // Split the node's text into words, preserving whitespace
-  const words = node.textContent?.split(/(\s+)/) || [];
-  const fragment = document.createDocumentFragment();
+  const { node } = sentence;
 
-  words.forEach((segment) => {
-    // Skip empty segments
-    if (!segment) return;
-
-    // If it's whitespace, keep it as-is
-    if (/^\s+$/.test(segment)) {
-      fragment.appendChild(document.createTextNode(segment));
-      return;
-    }
-
-    // Extract the actual word (remove punctuation for lookup)
-    const wordMatch = segment.match(/\b[\w']+\b/);
-    if (!wordMatch) {
-      fragment.appendChild(document.createTextNode(segment));
-      return;
-    }
-
-    const word = wordMatch[0];
-    const wordLower = word.toLowerCase();
-
-    // Check if this word should be translated
-    const translation = translations.get(wordLower);
-
-    if (translation) {
-      // Split the segment into before, word, and after (to preserve punctuation)
-      const beforeWord = segment.substring(0, wordMatch.index);
-      const afterWord = segment.substring((wordMatch.index || 0) + word.length);
-
-      // Add text before the word (if any)
-      if (beforeWord) {
-        fragment.appendChild(document.createTextNode(beforeWord));
-      }
-
-      // Create span for translated word
-      const span = createTranslatedWordSpan(word, translation.translatedWord);
-
-      fragment.appendChild(span);
-
-      // Add text after the word (punctuation, etc.)
-      if (afterWord) {
-        fragment.appendChild(document.createTextNode(afterWord));
-      }
-    } else {
-      // Keep original segment if not translating
-      fragment.appendChild(document.createTextNode(segment));
+  // Process each word pair
+  wordPairs.forEach((pair) => {
+    try {
+      replaceWordInNode(node, pair.original, pair.translated);
+    } catch (error) {
+      console.error(
+        `Error replacing word "${pair.original}" in sentence:`,
+        error
+      );
     }
   });
+}
 
-  // Replace the text node with our fragment
+/**
+ * Replace all occurrences of a word in a text node using regex
+ */
+function replaceWordInNode(
+  node: Text,
+  originalWord: string,
+  translatedWord: string
+): void {
+  if (!node.textContent) return;
+
+  const text = node.textContent;
+
+  // Create regex to find word with word boundaries (case-insensitive)
+  const wordRegex = new RegExp(`\\b${escapeRegex(originalWord)}\\b`, "gi");
+
+  // Check if word exists in this node
+  if (!wordRegex.test(text)) {
+    return; // Word not in this node
+  }
+
+  // Reset regex
+  wordRegex.lastIndex = 0;
+
+  // Find all matches with their positions
+  const matches: Array<{ index: number; word: string }> = [];
+  let match;
+
+  while ((match = wordRegex.exec(text)) !== null) {
+    matches.push({
+      index: match.index,
+      word: match[0], // Actual matched text (preserves original case)
+    });
+  }
+
+  if (matches.length === 0) return;
+
+  // Build new DOM structure with translated words
+  const fragment = document.createDocumentFragment();
+  let lastIndex = 0;
+
+  matches.forEach((match) => {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      fragment.appendChild(
+        document.createTextNode(text.substring(lastIndex, match.index))
+      );
+    }
+
+    // Preserve capitalization from original
+    const translatedWithCase = preserveCapitalization(
+      match.word,
+      translatedWord
+    );
+
+    // Create span for translated word
+    const span = createTranslatedWordSpan(match.word, translatedWithCase);
+    fragment.appendChild(span);
+
+    lastIndex = match.index + match.word.length;
+  });
+
+  // Add remaining text after last match
+  if (lastIndex < text.length) {
+    fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+  }
+
+  // Replace the original text node with the fragment
   node.parentNode?.replaceChild(fragment, node);
+}
+
+/**
+ * Escape special regex characters in a string
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Preserve capitalization from original word
+ */
+function preserveCapitalization(original: string, translated: string): string {
+  if (original.length === 0 || translated.length === 0) {
+    return translated;
+  }
+
+  // If entire word is uppercase
+  if (original === original.toUpperCase()) {
+    return translated.toUpperCase();
+  }
+
+  // If first letter is uppercase
+  if (original[0] === original[0].toUpperCase()) {
+    return translated.charAt(0).toUpperCase() + translated.slice(1);
+  }
+
+  // Otherwise keep as-is
+  return translated;
 }
 
 /**

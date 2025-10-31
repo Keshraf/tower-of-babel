@@ -142,7 +142,7 @@ export function getTextNodes(elements: Element[]): Text[] {
 }
 
 /**
- * Extract sentences from text nodes
+ * Sentence information with text node reference
  */
 export interface SentenceInfo {
   text: string;
@@ -151,6 +151,9 @@ export interface SentenceInfo {
   endOffset: number;
 }
 
+/**
+ * Extract sentences from text nodes
+ */
 export function extractSentences(textNodes: Text[]): SentenceInfo[] {
   const sentences: SentenceInfo[] = [];
 
@@ -158,6 +161,7 @@ export function extractSentences(textNodes: Text[]): SentenceInfo[] {
     if (!node.textContent) return;
 
     const text = node.textContent;
+    // Match sentences ending with . ! ? or just text without punctuation
     const sentenceRegex = /[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g;
     const matches = text.matchAll(sentenceRegex);
 
@@ -180,6 +184,39 @@ export function extractSentences(textNodes: Text[]): SentenceInfo[] {
   });
 
   return sentences;
+}
+
+/**
+ * NEW: Batch of sentences for processing together
+ */
+export interface SentenceBatch {
+  sentences: SentenceInfo[];
+  combinedText: string;
+}
+
+/**
+ * NEW: Group sentences into batches of specified size
+ */
+export function batchSentences(
+  sentences: SentenceInfo[],
+  batchSize: number = 5
+): SentenceBatch[] {
+  const batches: SentenceBatch[] = [];
+
+  for (let i = 0; i < sentences.length; i += batchSize) {
+    const batchSentences = sentences.slice(i, i + batchSize);
+    const combinedText = batchSentences.map((s) => s.text).join(" ");
+
+    batches.push({
+      sentences: batchSentences,
+      combinedText: combinedText,
+    });
+  }
+
+  console.log(
+    `Created ${batches.length} batches from ${sentences.length} sentences`
+  );
+  return batches;
 }
 
 /**

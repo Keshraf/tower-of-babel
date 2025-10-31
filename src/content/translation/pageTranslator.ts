@@ -2,9 +2,11 @@ import { translationService } from "../services/TranslationService";
 import {
   getContentElements,
   getTextNodes,
+  extractSentences,
+  batchSentences,
   ProgressiveTextLoader,
 } from "../utils/textExtraction";
-import { translateAndReplaceNodes } from "./nodeTranslator";
+import { translateAndReplaceBatches } from "./nodeTranslator";
 import { translationState } from "./translationState";
 
 /**
@@ -59,16 +61,27 @@ export async function translatePage(): Promise<void> {
 
     // Process visible content immediately
     if (visible.length > 0) {
+      // Extract text nodes from visible elements
       const visibleTextNodes = getTextNodes(visible);
-      console.log(`Processing ${visibleTextNodes.length} visible text nodes`);
+      console.log(`Found ${visibleTextNodes.length} visible text nodes`);
+
+      // Extract sentences from text nodes
+      const visibleSentences = extractSentences(visibleTextNodes);
+      console.log(`Extracted ${visibleSentences.length} visible sentences`);
+
+      // Batch sentences into groups of 5
+      const visibleBatches = batchSentences(visibleSentences, 5);
+      console.log(
+        `Created ${visibleBatches.length} batches for visible content`
+      );
 
       // Check if still active before processing
       if (!translationState.shouldContinue()) {
-        console.log("Translation cancelled before processing visible nodes");
+        console.log("Translation cancelled before processing visible batches");
         return;
       }
 
-      await translateAndReplaceNodes(visibleTextNodes);
+      await translateAndReplaceBatches(visibleBatches);
     }
 
     // Check again before setting up progressive loading
@@ -87,8 +100,11 @@ export async function translatePage(): Promise<void> {
         }
 
         const textNodes = getTextNodes([element]);
-        console.log(`Lazily processing ${textNodes.length} text nodes`);
-        await translateAndReplaceNodes(textNodes);
+        const sentences = extractSentences(textNodes);
+        const batches = batchSentences(sentences, 5);
+
+        console.log(`Lazily processing ${batches.length} batches`);
+        await translateAndReplaceBatches(batches);
       });
 
       loader.observe(hidden);

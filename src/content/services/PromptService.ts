@@ -1,6 +1,21 @@
 import { TranslationConfig, DENSITY_RATIOS } from "../utils/translationConfig";
 
 /**
+ * Simple word pair without position information
+ */
+export interface WordPair {
+  original: string;
+  translated: string;
+}
+
+/**
+ * Response from Prompt API with word pairs
+ */
+interface WordPairResponse {
+  words: WordPair[];
+}
+
+/**
  * Service for using Prompt API to intelligently select words to translate
  */
 class PromptService {
@@ -71,18 +86,19 @@ class PromptService {
   }
 
   /**
-   * Select words to translate from a sentence using Prompt API
+   * NEW: Select words from text batch (no position tracking)
    */
-  async selectWordsToTranslate(
-    sentence: string,
+  async selectWordsFromBatch(
+    originalText: string,
+    translatedText: string,
     config: TranslationConfig
-  ): Promise<string[]> {
+  ): Promise<WordPair[]> {
     if (!this.session) {
       throw new Error("Prompt API not initialized");
     }
 
     // Calculate target word count based on density
-    const words = sentence.match(/\b[\w']+\b/g) || [];
+    const words = originalText.match(/\b[\w']+\b/g) || [];
     const densityRatio = DENSITY_RATIOS[config.density];
     const targetWordCount = Math.max(
       1,
@@ -96,59 +112,103 @@ class PromptService {
         words: {
           type: "array",
           items: {
-            type: "string",
+            type: "object",
+            properties: {
+              original: {
+                type: "string",
+                description: "The English word to translate",
+              },
+              translated: {
+                type: "string",
+                description: "The French translation",
+              },
+            },
+            required: ["original", "translated"],
           },
-          description: "Array of words to translate",
         },
       },
       required: ["words"],
     };
 
-    // Create prompt based on difficulty level
+    // Get difficulty-specific guidance
     const difficultyGuidance = this.getDifficultyGuidance(config.difficulty);
 
-    const prompt = `Analyze this sentence and select exactly ${targetWordCount} words to translate for a ${config.difficulty} level ${config.targetLanguage} learner.
+    const prompt = `You are helping a ${config.difficulty} level ${config.targetLanguage} learner select words to practice.
 
-Sentence: "${sentence}"
+ORIGINAL ENGLISH TEXT:
+"${originalText}"
 
-Selection criteria:
+FRENCH TRANSLATION:
+"${translatedText}"
+
+TASK: Select exactly ${targetWordCount} words from the ORIGINAL English text that should be translated for learning.
+
+SELECTION CRITERIA:
 ${difficultyGuidance}
 
-Rules:
-- Select ONLY words that appear in the sentence
-- Do NOT select proper nouns (names, places, brands)
-- Do NOT select very common words (the, a, an, is, are, etc.)
-- Do NOT select punctuation
-- Return words in lowercase
-- Select exactly ${targetWordCount} words (or fewer if not enough suitable words exist)
+RULES:
+1. Select ONLY words that appear in the original English text
+2. Do NOT select proper nouns (names, places, brands)
+3. Do NOT select very common words (the, a, an, is, are, was, were, be, been, have, has, had, do, does, did, will, would, etc.)
+4. Do NOT select punctuation
+5. Match each English word with its corresponding French translation
+6. Return words in lowercase
+7. Select exactly ${targetWordCount} words (or fewer if not enough suitable words exist)
 
-Return a JSON object with a "words" array containing the selected words.`;
+IMPORTANT: We will use these word pairs to find and replace ALL occurrences of each word in the text.
+
+Return a JSON object with a "words" array containing simple word pairs.
+
+Example format:
+{
+  "words": [
+    {"original": "cat", "translated": "chat"},
+    {"original": "house", "translated": "maison"}
+  ]
+}`;
 
     try {
+      console.log(`Selecting ${targetWordCount} words from batch...`);
+
       const result = await this.session.prompt(prompt, {
         responseConstraint: schema,
       });
 
-      const parsed = JSON.parse(result);
-      const selectedWords = parsed.words || [];
+      const parsed: WordPairResponse = JSON.parse(result);
+      const wordPairs = parsed.words || [];
 
-      console.log(
-        `Selected ${selectedWords.length} words from sentence:`,
-        selectedWords
-      );
+      console.log(`Selected ${wordPairs.length} word pairs:`, wordPairs);
 
-      // Validate that selected words actually exist in sentence
-      const sentenceLower = sentence.toLowerCase();
-      const validWords = selectedWords.filter((word: string) =>
-        sentenceLower.includes(word.toLowerCase())
-      );
+      // Validate that words exist in original text
+      const validPairs = this.validateWordPairs(wordPairs, originalText);
 
-      return validWords;
+      return validPairs;
     } catch (error) {
-      console.error("Error selecting words:", error);
-      // Fallback to simple selection if Prompt API fails
-      return this.fallbackWordSelection(sentence, targetWordCount, config);
+      console.error("Error selecting words from batch:", error);
+      // Return empty array on error
+      return [];
     }
+  }
+
+  /**
+   * Validate that word pairs actually exist in the original text
+   */
+  private validateWordPairs(
+    pairs: WordPair[],
+    originalText: string
+  ): WordPair[] {
+    const lowerOriginal = originalText.toLowerCase();
+
+    return pairs.filter((pair) => {
+      const wordRegex = new RegExp(`\\b${pair.original.toLowerCase()}\\b`);
+      const exists = wordRegex.test(lowerOriginal);
+
+      if (!exists) {
+        console.warn(`Word "${pair.original}" not found in text, skipping`);
+      }
+
+      return exists;
+    });
   }
 
   /**
@@ -177,80 +237,6 @@ Return a JSON object with a "words" array containing the selected words.`;
       default:
         return "";
     }
-  }
-
-  /**
-   * Fallback word selection if Prompt API fails
-   */
-  private fallbackWordSelection(
-    sentence: string,
-    targetCount: number,
-    config: TranslationConfig
-  ): string[] {
-    const commonWords = new Set([
-      "the",
-      "a",
-      "an",
-      "and",
-      "or",
-      "but",
-      "is",
-      "are",
-      "was",
-      "were",
-      "be",
-      "been",
-      "have",
-      "has",
-      "had",
-      "do",
-      "does",
-      "did",
-      "will",
-      "would",
-      "could",
-      "should",
-      "can",
-      "may",
-      "might",
-      "must",
-      "i",
-      "you",
-      "he",
-      "she",
-      "it",
-      "we",
-      "they",
-      "this",
-      "that",
-      "in",
-      "on",
-      "at",
-      "to",
-      "for",
-      "of",
-      "with",
-      "from",
-      "by",
-    ]);
-
-    const words = sentence.match(/\b[\w']+\b/g) || [];
-    let candidates = words.filter((word) => {
-      const lower = word.toLowerCase();
-      return word.length >= 3 && !commonWords.has(lower);
-    });
-
-    // Remove duplicates
-    candidates = Array.from(new Set(candidates.map((w) => w.toLowerCase())));
-
-    // Sort based on difficulty
-    if (config.difficulty === "beginner") {
-      candidates.sort((a, b) => a.length - b.length);
-    } else if (config.difficulty === "advanced") {
-      candidates.sort((a, b) => b.length - a.length);
-    }
-
-    return candidates.slice(0, targetCount);
   }
 
   /**
