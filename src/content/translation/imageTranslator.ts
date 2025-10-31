@@ -155,9 +155,7 @@ export async function translateImage(
       return;
     }
 
-    console.log(
-      `[ImageTranslator] Processing image: ${imageSource.substring(0, 50)}...`
-    );
+    console.log(`[ImageTranslator] Processing image: ${imageSource}...`);
 
     // Step 1: Describe image in English using Prompt API
     const englishWord = await imageDescriptionService.describeImage(

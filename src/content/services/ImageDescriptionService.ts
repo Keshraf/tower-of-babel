@@ -61,10 +61,6 @@ Examples:
    * @returns English word describing the image
    */
   async describeImage(imageUrl: string): Promise<string> {
-    if (!this.isInitialized || !this.session) {
-      await this.initialize();
-    }
-
     try {
       // Fetch the image and convert to blob if it's a URL
       let imageBlob: Blob;
@@ -79,13 +75,51 @@ Examples:
         imageBlob = await response.blob();
       }
 
-      // Send image to Prompt API with strict instruction
-      const result = await this.session.prompt(
-        "Identify this image using EXACTLY ONE WORD. Only respond with a single English word, nothing else.",
+      // Create a fresh session for this specific image with multimodal support
+      const params = await (self as any).LanguageModel.params();
+      const imageSession = await (self as any).LanguageModel.create({
+        temperature: params.defaultTemperature,
+        topK: params.defaultTopK,
+        initialPrompts: [
+          {
+            role: "system",
+            content: `You are an image identification assistant. Your task is to identify what you see in an image using ONLY ONE WORD in English.
+
+Rules:
+- Use only ONE word (singular noun preferred)
+- Use simple, common English words
+- Do not be descriptive or use phrases
+- Just provide the word that best represents the main subject of the image
+- Return ONLY the word, nothing else
+- No punctuation, no explanations
+
+Examples:
+- Picture of a cat → "cat"
+- Image of a mountain → "mountain"
+- Photo of a person smiling → "person"
+- Drawing of a tree → "tree"`,
+          },
+        ],
+        expectedInputs: [{ type: "image" }],
+      });
+
+      // Send image to Prompt API with correct multimodal format
+      const result = await imageSession.prompt([
         {
-          image: imageBlob,
-        }
-      );
+          role: "user",
+          content: [
+            {
+              type: "text",
+              value:
+                "Identify this image using EXACTLY ONE WORD. Only respond with a single English word, nothing else.",
+            },
+            { type: "image", value: imageBlob },
+          ],
+        },
+      ]);
+
+      // Clean up the session immediately after use
+      imageSession.destroy();
 
       // Clean and validate the response - extract first word only
       const cleaned = result.trim().toLowerCase();
