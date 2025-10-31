@@ -1,9 +1,12 @@
+import { clearImageTranslations } from "./imageTranslator";
+
 /**
  * Remove all translated words and restore original text
  */
 export function clearTranslations(): void {
   console.log("Clearing all translations...");
 
+  // Clear text translations
   const translatedWords = document.querySelectorAll(".translated-word");
 
   translatedWords.forEach((span) => {
@@ -16,7 +19,10 @@ export function clearTranslations(): void {
     }
   });
 
-  console.log(`Cleared ${translatedWords.length} translations`);
+  console.log(`Cleared ${translatedWords.length} text translations`);
+
+  // Clear image translations
+  clearImageTranslations();
 }
 
 /**

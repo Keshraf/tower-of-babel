@@ -8,6 +8,7 @@ import {
 } from "../utils/textExtraction";
 import { translateAndReplaceBatches } from "./nodeTranslator";
 import { translationState } from "./translationState";
+import { translateImages } from "./imageTranslator";
 
 /**
  * Separate elements into visible and hidden based on viewport
@@ -108,6 +109,13 @@ export async function translatePage(): Promise<void> {
       });
 
       loader.observe(hidden);
+    }
+
+    // Translate images after text translation is complete
+    if (translationState.shouldContinue()) {
+      console.log("Starting image translation...");
+      const currentLanguage = translationService.getCurrentLanguage();
+      await translateImages(currentLanguage);
     }
 
     console.log("Page translation complete");

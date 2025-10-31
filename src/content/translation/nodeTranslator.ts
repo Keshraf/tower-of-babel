@@ -3,6 +3,7 @@ import { storageService } from "../services/StorageService";
 import { type SentenceBatch, type SentenceInfo } from "../utils/textExtraction";
 import { translationState } from "./translationState";
 import type { WordPair } from "../services/PromptService";
+import { setImageHoverHandler } from "./imageTranslator";
 
 interface WordData {
   english: string;
@@ -22,6 +23,8 @@ let hoverHandler: WordHoverHandler | null = null;
  */
 export function setTooltipHandler(handler: WordHoverHandler): void {
   hoverHandler = handler;
+  // Also set it for images
+  setImageHoverHandler(handler);
 }
 
 /**

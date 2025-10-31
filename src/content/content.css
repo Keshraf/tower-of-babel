@@ -90,3 +90,59 @@
     all: revert;
   }
 }
+
+/* Image Translation Overlay Styles */
+.tob-image-container {
+  position: relative;
+  display: inline-block;
+}
+
+.tob-image-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  padding: 12px;
+}
+
+.tob-image-container:hover .tob-image-overlay {
+  opacity: 1;
+}
+
+.tob-image-overlay-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.tob-image-overlay-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 6px 12px;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  pointer-events: none;
+}
+
+.tob-image-overlay-translated {
+  color: #2563eb;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.tob-image-overlay-divider {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.tob-image-overlay-english {
+  color: #4b5563;
+  font-size: 13px;
+}
