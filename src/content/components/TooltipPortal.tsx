@@ -52,18 +52,10 @@ export default function TooltipPortal() {
       </div>
       <div
         className="translation"
-        style={{ fontSize: "14px", color: "#6b7280", marginBottom: "4px" }}
+        style={{ fontSize: "14px", color: "#6b7280" }}
       >
         English: <span style={{ color: "#1f2937" }}>{wordData.english}</span>
       </div>
-      {wordData.pronunciation && (
-        <div
-          className="pronunciation"
-          style={{ fontSize: "12px", color: "#9ca3af", fontStyle: "italic" }}
-        >
-          {wordData.pronunciation}
-        </div>
-      )}
     </div>
   );
 }

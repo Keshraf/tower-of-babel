@@ -1,102 +1,152 @@
 import {
   TranslationConfig,
   getTranslationConfig as loadConfig,
+  setTranslationConfig,
 } from "../utils/translationConfig";
-import { createRewriter, isRewriterAvailable } from "../utils/rewriterAPI";
+import { promptService } from "./PromptService";
+import { translatorService } from "./TranslatorService";
 
+/**
+ * Main translation service that orchestrates Prompt API and Translator API
+ */
 class TranslationService {
-  private rewriter: any = null;
   private config: TranslationConfig | null = null;
   private initPromise: Promise<void> | null = null;
 
   /**
-   * Initialize the translation service
-   * This can be called multiple times safely - it will only initialize once
+   * Initialize both Prompt API and Translator API
    */
-  async initialize(onProgress?: (progress: number) => void): Promise<void> {
-    // Return existing initialization if already in progress
+  async initialize(
+    onProgress?: (progress: number, stage: string) => void
+  ): Promise<void> {
     if (this.initPromise) {
       return this.initPromise;
     }
 
     this.initPromise = (async () => {
-      console.log("Initializing translation service...");
-
-      // Check if Rewriter API is available
-      const availability = await isRewriterAvailable();
-
-      if (availability === "no") {
-        throw new Error(
-          "Rewriter API not available. Make sure Chrome Built-in AI is enabled."
-        );
-      }
+      console.log("Initializing translation services...");
 
       // Load configuration
       this.config = await loadConfig();
       console.log("Translation config loaded:", this.config);
 
-      // Create rewriter instance
-      if (availability === "available") {
-        console.log("Rewriter is ready to use immediately!");
-      } else {
-        console.log(
-          "Rewriter model will be downloaded. This may take a few minutes..."
+      // Get target language code (default to 'fr' for French)
+      const targetLanguageCode = this.getLanguageCode(
+        this.config.targetLanguage
+      );
+
+      try {
+        // Initialize Prompt API for word selection
+        onProgress?.(0, "Initializing word selection AI...");
+        await promptService.initialize(this.config, (progress) => {
+          onProgress?.(progress * 0.5, "Downloading word selection model...");
+        });
+
+        // Initialize Translator API
+        onProgress?.(50, "Initializing translator...");
+        await translatorService.initialize(
+          "en",
+          targetLanguageCode,
+          (progress) => {
+            onProgress?.(
+              50 + progress * 0.5,
+              "Downloading translation model..."
+            );
+          }
         );
+
+        onProgress?.(100, "Ready!");
+        console.log("All translation services initialized successfully");
+      } catch (error) {
+        console.error("Failed to initialize translation services:", error);
+        throw error;
       }
-
-      this.rewriter = await createRewriter(this.config, (progress) => {
-        console.log(`Download progress: ${progress.toFixed(1)}%`);
-        onProgress?.(progress);
-      });
-
-      console.log("Translation service initialized successfully");
     })();
 
     return this.initPromise;
   }
 
   /**
-   * Get the rewriter instance
-   * Throws if not initialized
+   * Convert language name to BCP 47 code
    */
-  getRewriter(): any {
-    if (!this.rewriter) {
-      throw new Error(
-        "Translation service not initialized. Call initialize() first."
-      );
-    }
-    return this.rewriter;
+  private getLanguageCode(languageName: string): string {
+    const languageCodes: Record<string, string> = {
+      french: "fr",
+      spanish: "es",
+      german: "de",
+      italian: "it",
+      portuguese: "pt",
+      japanese: "ja",
+    };
+
+    const normalized = languageName.toLowerCase();
+    return languageCodes[normalized] || "fr"; // Default to French
   }
 
   /**
-   * Get the current configuration
-   * Throws if not initialized
+   * Update configuration and reinitialize services
+   */
+  async updateConfig(newConfig: Partial<TranslationConfig>): Promise<void> {
+    console.log("Updating translation config:", newConfig);
+
+    // Save to storage
+    await setTranslationConfig(newConfig);
+
+    // Reset and reinitialize
+    this.reset();
+    await this.initialize();
+  }
+
+  /**
+   * Get the Prompt service
+   */
+  getPromptService() {
+    if (!promptService.isInitialized()) {
+      throw new Error("Prompt service not initialized");
+    }
+    return promptService;
+  }
+
+  /**
+   * Get the Translator service
+   */
+  getTranslatorService() {
+    if (!translatorService.isInitialized()) {
+      throw new Error("Translator service not initialized");
+    }
+    return translatorService;
+  }
+
+  /**
+   * Get current configuration
    */
   getConfig(): TranslationConfig {
     if (!this.config) {
-      throw new Error(
-        "Translation service not initialized. Call initialize() first."
-      );
+      throw new Error("Translation service not initialized");
     }
     return this.config;
   }
 
   /**
-   * Check if the service is initialized
+   * Check if all services are initialized
    */
   isInitialized(): boolean {
-    return this.rewriter !== null && this.config !== null;
+    return (
+      this.config !== null &&
+      promptService.isInitialized() &&
+      translatorService.isInitialized()
+    );
   }
 
   /**
-   * Reset the service (useful for testing or config changes)
+   * Reset all services
    */
   reset(): void {
-    this.rewriter = null;
+    promptService.reset();
+    translatorService.reset();
     this.config = null;
     this.initPromise = null;
   }
 }
 
-// Singleton instance
 export const translationService = new TranslationService();

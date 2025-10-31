@@ -3,7 +3,6 @@ import { createContext, useContext, useState, ReactNode } from "react";
 interface WordData {
   english: string;
   french: string;
-  pronunciation?: string;
 }
 
 interface TooltipState {

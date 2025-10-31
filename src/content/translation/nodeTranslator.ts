@@ -1,11 +1,10 @@
 import { translationService } from "../services/TranslationService";
 import { extractSentences, type SentenceInfo } from "../utils/textExtraction";
-import { translateSentence } from "../utils/rewriterAPI";
+import { translationState } from "./translationState";
 
 interface WordData {
   english: string;
   french: string;
-  pronunciation?: string;
 }
 
 interface TooltipHandler {
@@ -13,12 +12,16 @@ interface TooltipHandler {
   hide: () => void;
 }
 
+interface TranslationResult {
+  originalWord: string;
+  translatedWord: string;
+}
+
 // Store tooltip handler so DOM event handlers can access it
 let tooltipHandler: TooltipHandler | null = null;
 
 /**
  * Set the tooltip handler from React context
- * This bridges the gap between React and vanilla DOM manipulation
  */
 export function setTooltipHandler(handler: TooltipHandler): void {
   tooltipHandler = handler;
@@ -37,8 +40,15 @@ export async function translateAndReplaceNodes(
     return;
   }
 
+  // Check if translation is still active
+  if (!translationState.shouldContinue()) {
+    console.log("Translation cancelled, skipping node processing");
+    return;
+  }
+
+  const promptService = translationService.getPromptService();
+  const translatorService = translationService.getTranslatorService();
   const config = translationService.getConfig();
-  const rewriter = translationService.getRewriter();
 
   // Extract sentences from text nodes
   const sentences = extractSentences(textNodes);
@@ -46,31 +56,93 @@ export async function translateAndReplaceNodes(
 
   // Process each sentence
   for (const sentenceInfo of sentences) {
+    // Check if we should continue before each sentence
+    if (!translationState.shouldContinue()) {
+      console.log("Translation cancelled mid-processing");
+      return;
+    }
+
     try {
-      await processSentence(sentenceInfo, config, rewriter);
+      await processSentence(
+        sentenceInfo,
+        promptService,
+        translatorService,
+        config
+      );
     } catch (error) {
+      // Check if it was an abort
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Sentence processing aborted");
+        return;
+      }
       console.error("Error processing sentence:", error);
     }
   }
 }
 
 /**
- * Process a single sentence and replace words in the DOM
+ * Process a single sentence: select words and translate them
  */
 async function processSentence(
   sentenceInfo: SentenceInfo,
-  config: any,
-  rewriter: any
+  promptService: any,
+  translatorService: any,
+  config: any
 ): Promise<void> {
   const { text, node } = sentenceInfo;
 
-  // Get translations for this sentence
-  const translations = await translateSentence(text, config, rewriter);
+  console.log(`Processing sentence: "${text.substring(0, 100)}..."`);
 
-  if (translations.size === 0) {
-    return; // No words to translate in this sentence
+  // Check if still active
+  if (!translationState.shouldContinue()) {
+    throw new DOMException("Translation aborted", "AbortError");
   }
 
+  // Step 1: Use Prompt API to select words to translate
+  const wordsToTranslate = await promptService.selectWordsToTranslate(
+    text,
+    config
+  );
+
+  if (wordsToTranslate.length === 0) {
+    console.log("No words selected for translation in this sentence");
+    return;
+  }
+
+  console.log(`Selected ${wordsToTranslate.length} words:`, wordsToTranslate);
+
+  // Check again before translation
+  if (!translationState.shouldContinue()) {
+    throw new DOMException("Translation aborted", "AbortError");
+  }
+
+  // Step 2: Use Translator API to translate selected words
+  const translations = await translatorService.translateWords(
+    wordsToTranslate,
+    text
+  );
+
+  if (translations.size === 0) {
+    console.log("No translations returned");
+    return;
+  }
+
+  // Check one more time before DOM manipulation
+  if (!translationState.shouldContinue()) {
+    throw new DOMException("Translation aborted", "AbortError");
+  }
+
+  // Step 3: Replace words in the DOM
+  replaceWordsInNode(node, translations);
+}
+
+/**
+ * Replace translated words in the DOM node
+ */
+function replaceWordsInNode(
+  node: Text,
+  translations: Map<string, TranslationResult>
+): void {
   // Split the node's text into words, preserving whitespace
   const words = node.textContent?.split(/(\s+)/) || [];
   const fragment = document.createDocumentFragment();
@@ -109,11 +181,7 @@ async function processSentence(
       }
 
       // Create span for translated word
-      const span = createTranslatedWordSpan(
-        word,
-        translation.translatedWord,
-        translation.pronunciation || ""
-      );
+      const span = createTranslatedWordSpan(word, translation.translatedWord);
 
       fragment.appendChild(span);
 
@@ -136,8 +204,7 @@ async function processSentence(
  */
 function createTranslatedWordSpan(
   originalWord: string,
-  translatedWord: string,
-  pronunciation: string
+  translatedWord: string
 ): HTMLSpanElement {
   const span = document.createElement("span");
   span.textContent = translatedWord;
@@ -148,7 +215,6 @@ function createTranslatedWordSpan(
   // Store data attributes
   span.dataset.original = originalWord;
   span.dataset.translation = translatedWord;
-  span.dataset.pronunciation = pronunciation;
 
   // Add hover listeners
   span.addEventListener("mouseenter", () => {
@@ -160,7 +226,6 @@ function createTranslatedWordSpan(
         {
           english: originalWord,
           french: translatedWord,
-          pronunciation: pronunciation,
         },
         rect.left,
         rect.bottom + window.scrollY
