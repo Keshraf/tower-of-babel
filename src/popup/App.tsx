@@ -167,8 +167,12 @@ function App() {
     <div className="w-full min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <div className="flex items-center gap-2">
-          <Globe className="w-6 h-6 text-blue-600" />
+        <div className="flex items-center gap-3">
+          <img
+            src="/public/Logo.png"
+            alt="Tower of Babel"
+            className="w-8 h-8"
+          />
           <h1 className="text-lg font-bold text-gray-900">Tower of Babel</h1>
         </div>
       </div>

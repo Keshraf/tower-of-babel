@@ -3,7 +3,7 @@ import pkg from "./package.json";
 
 export default defineManifest({
   manifest_version: 3,
-  name: pkg.name,
+  name: "Tower of Babel - Learn while browsing",
   version: pkg.version,
   icons: {
     48: "public/logo.png",
@@ -28,5 +28,10 @@ export default defineManifest({
   side_panel: {
     default_path: "src/sidepanel/index.html",
   },
-  // Removed web_accessible_resources - not needed for internal extension pages
+  web_accessible_resources: [
+    {
+      resources: ["public/Logo.png"],
+      matches: ["https://*/*"],
+    },
+  ],
 });

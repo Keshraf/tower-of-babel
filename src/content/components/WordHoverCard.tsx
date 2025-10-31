@@ -33,9 +33,9 @@ export function WordHoverCard({
   const [timesEncountered, setTimesEncountered] = useState<number>(1);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
-  const [cachedQuestions, setCachedQuestions] = useState<
-    Record<string, any[]>
-  >({});
+  const [cachedQuestions, setCachedQuestions] = useState<Record<string, any[]>>(
+    {}
+  );
   const [currentWordKey, setCurrentWordKey] = useState<string>("");
 
   // Track word changes and reset quiz state
@@ -118,7 +118,12 @@ export function WordHoverCard({
         {!showQuiz ? (
           <div className="flex flex-col h-full">
             {/* Header with Word Translation */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 rounded-t-md flex-shrink-0">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 rounded-t-md flex-shrink-0 relative">
+              <img
+                src={chrome.runtime.getURL("public/Logo.png")}
+                alt="Tower of Babel"
+                className="absolute top-2 right-2 w-5 h-5 opacity-50"
+              />
               <div className="space-y-2">
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
