@@ -1,4 +1,5 @@
 import { translationService } from "../services/TranslationService";
+import { storageService } from "../services/StorageService";
 import { type SentenceBatch, type SentenceInfo } from "../utils/textExtraction";
 import { translationState } from "./translationState";
 import type { WordPair } from "../services/PromptService";
@@ -24,7 +25,7 @@ export function setTooltipHandler(handler: TooltipHandler): void {
 }
 
 /**
- * NEW: Translate and replace sentence batches using regex
+ * Translate and replace sentence batches using regex
  */
 export async function translateAndReplaceBatches(
   batches: SentenceBatch[]
@@ -207,6 +208,14 @@ function replaceWordInNode(
     // Create span for translated word
     const span = createTranslatedWordSpan(match.word, translatedWithCase);
     fragment.appendChild(span);
+
+    // CRITICAL: Record this word encounter in storage
+    const language = translationService.getCurrentLanguage();
+    storageService.recordWordEncounter(
+      language,
+      originalWord.toLowerCase(),
+      translatedWord.toLowerCase()
+    );
 
     lastIndex = match.index + match.word.length;
   });

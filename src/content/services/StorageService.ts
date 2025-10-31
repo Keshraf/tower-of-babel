@@ -3,6 +3,9 @@ import type {
   LanguageStats,
   WordData,
   LanguageData,
+  DifficultyLevel,
+  DensityLevel,
+  TranslationConfig,
 } from "../utils/translationConfig";
 
 /**
@@ -10,12 +13,51 @@ import type {
  */
 class StorageService {
   /**
+   * Get full config
+   */
+  async getConfig(): Promise<TranslationConfig> {
+    try {
+      const result = await chrome.storage.local.get("config");
+      return (
+        result.config || {
+          activeLanguage: "french",
+          difficulty: "beginner",
+          density: "high",
+          translationEnabled: true,
+        }
+      );
+    } catch (error) {
+      console.error("Error getting config:", error);
+      return {
+        activeLanguage: "french",
+        difficulty: "beginner",
+        density: "high",
+        translationEnabled: true,
+      };
+    }
+  }
+
+  /**
+   * Update config (partial update)
+   */
+  async updateConfig(updates: Partial<TranslationConfig>): Promise<void> {
+    try {
+      const currentConfig = await this.getConfig();
+      const newConfig = { ...currentConfig, ...updates };
+      await chrome.storage.local.set({ config: newConfig });
+      console.log("Config updated:", newConfig);
+    } catch (error) {
+      console.error("Error updating config:", error);
+    }
+  }
+
+  /**
    * Get active language from config
    */
   async getActiveLanguage(): Promise<SupportedLanguage> {
     try {
-      const result = await chrome.storage.local.get("config");
-      return result.config?.activeLanguage || "french";
+      const config = await this.getConfig();
+      return config.activeLanguage || "french";
     } catch (error) {
       console.error("Error getting active language:", error);
       return "french";
@@ -26,15 +68,67 @@ class StorageService {
    * Set active language in config
    */
   async setActiveLanguage(language: SupportedLanguage): Promise<void> {
+    await this.updateConfig({ activeLanguage: language });
+  }
+
+  /**
+   * Get difficulty level
+   */
+  async getDifficulty(): Promise<DifficultyLevel> {
     try {
-      const result = await chrome.storage.local.get("config");
-      const config = result.config || {};
-      config.activeLanguage = language;
-      await chrome.storage.local.set({ config });
-      console.log("Active language set to:", language);
+      const config = await this.getConfig();
+      return config.difficulty || "beginner";
     } catch (error) {
-      console.error("Error setting active language:", error);
+      console.error("Error getting difficulty:", error);
+      return "beginner";
     }
+  }
+
+  /**
+   * Set difficulty level
+   */
+  async setDifficulty(difficulty: DifficultyLevel): Promise<void> {
+    await this.updateConfig({ difficulty });
+  }
+
+  /**
+   * Get density level
+   */
+  async getDensity(): Promise<DensityLevel> {
+    try {
+      const config = await this.getConfig();
+      return config.density || "high";
+    } catch (error) {
+      console.error("Error getting density:", error);
+      return "high";
+    }
+  }
+
+  /**
+   * Set density level
+   */
+  async setDensity(density: DensityLevel): Promise<void> {
+    await this.updateConfig({ density });
+  }
+
+  /**
+   * Get translation enabled state
+   */
+  async getTranslationEnabled(): Promise<boolean> {
+    try {
+      const config = await this.getConfig();
+      return config.translationEnabled !== false;
+    } catch (error) {
+      console.error("Error getting translation enabled:", error);
+      return true;
+    }
+  }
+
+  /**
+   * Set translation enabled state
+   */
+  async setTranslationEnabled(enabled: boolean): Promise<void> {
+    await this.updateConfig({ translationEnabled: enabled });
   }
 
   /**
@@ -188,7 +282,6 @@ class StorageService {
       };
 
       await chrome.storage.local.set({ languages });
-      console.log(`Word saved for ${language}:`, wordId);
     } catch (error) {
       console.error("Error saving word:", error);
     }
@@ -196,6 +289,7 @@ class StorageService {
 
   /**
    * Record a word encounter (increment or create)
+   * This is called every time a word is translated on the page
    */
   async recordWordEncounter(
     language: SupportedLanguage,
@@ -203,18 +297,19 @@ class StorageService {
     translated: string
   ): Promise<void> {
     try {
-      const existingWord = await this.getWord(language, english);
+      const wordId = english.toLowerCase();
+      const existingWord = await this.getWord(language, wordId);
 
       if (existingWord) {
         // Word exists, increment counter
-        await this.saveWord(language, english, {
+        await this.saveWord(language, wordId, {
           ...existingWord,
           timesEncountered: existingWord.timesEncountered + 1,
           lastSeenDate: new Date().toISOString(),
         });
       } else {
         // New word
-        await this.saveWord(language, english, {
+        await this.saveWord(language, wordId, {
           english,
           translated,
           timesEncountered: 1,
@@ -222,7 +317,7 @@ class StorageService {
           lastSeenDate: new Date().toISOString(),
         });
 
-        // Increment total words encountered
+        // Increment total words encountered (only for new words)
         await this.incrementStat(language, "totalWordsEncountered");
       }
     } catch (error) {
