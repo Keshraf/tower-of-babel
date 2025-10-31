@@ -43,6 +43,7 @@ export function WordHoverCard({
     english: string;
   } | null>(null);
   const [isLoadingExample, setIsLoadingExample] = useState(false);
+  const [isSpeakingExample, setIsSpeakingExample] = useState(false);
   const [cachedExamples, setCachedExamples] = useState<
     Record<string, { target: string; english: string }>
   >({});
@@ -135,6 +136,21 @@ export function WordHoverCard({
       console.error("Error speaking word:", error);
     } finally {
       setIsSpeaking(false);
+    }
+  };
+
+  const handleSpeakExample = async () => {
+    if (!exampleSentence) return;
+
+    setIsSpeakingExample(true);
+    try {
+      // Get language code for TTS
+      const langCode = language === "french" ? "fr-FR" : "es-ES";
+      await speak(exampleSentence.target, langCode);
+    } catch (error) {
+      console.error("Error speaking example sentence:", error);
+    } finally {
+      setIsSpeakingExample(false);
     }
   };
 
@@ -244,9 +260,21 @@ export function WordHoverCard({
                   ) : exampleSentence ? (
                     // Example sentence content
                     <div className="space-y-1.5 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-                      <p className="text-sm font-semibold text-indigo-700 leading-relaxed">
-                        {exampleSentence.target}
-                      </p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-indigo-700 leading-relaxed flex-1">
+                          {exampleSentence.target}
+                        </p>
+                        <button
+                          onClick={handleSpeakExample}
+                          disabled={isSpeakingExample}
+                          className={`flex-shrink-0 p-1 rounded hover:bg-indigo-100 transition-colors ${
+                            isSpeakingExample ? "opacity-50 cursor-not-allowed" : ""
+                          }`}
+                          title="Listen to example"
+                        >
+                          <Volume2 className={`w-4 h-4 text-indigo-600 ${isSpeakingExample ? "animate-pulse" : ""}`} />
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-600 leading-relaxed">
                         {exampleSentence.english}
                       </p>
