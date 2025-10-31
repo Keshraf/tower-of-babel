@@ -5,9 +5,10 @@ import {
   HoverCardTrigger,
 } from "../../components/ui/hover-card";
 import { Button } from "../../components/ui/button";
-import { Volume2, Brain } from "lucide-react";
+import { Volume2, Brain, BookOpen } from "lucide-react";
 import { speak } from "../utils/tts";
 import { storageService } from "../services/StorageService";
+import { exampleSentenceService } from "../services/ExampleSentenceService";
 import { QuizView } from "./QuizView";
 import type { SupportedLanguage } from "../utils/translationConfig";
 
@@ -37,6 +38,14 @@ export function WordHoverCard({
     {}
   );
   const [currentWordKey, setCurrentWordKey] = useState<string>("");
+  const [exampleSentence, setExampleSentence] = useState<{
+    target: string;
+    english: string;
+  } | null>(null);
+  const [isLoadingExample, setIsLoadingExample] = useState(false);
+  const [cachedExamples, setCachedExamples] = useState<
+    Record<string, { target: string; english: string }>
+  >({});
 
   // Track word changes and reset quiz state
   useEffect(() => {
@@ -59,8 +68,60 @@ export function WordHoverCard({
         }
       };
       fetchWordData();
+
+      // Generate example sentence
+      generateExampleSentence(wordKey);
     }
   }, [wordData?.english, language]);
+
+  const generateExampleSentence = async (wordKey: string) => {
+    // Check if we have a cached example for this word
+    if (cachedExamples[wordKey]) {
+      console.log("[WordHoverCard] Using cached example sentence");
+      setExampleSentence(cachedExamples[wordKey]);
+      return;
+    }
+
+    if (!wordData || !anchorEl) return;
+
+    setIsLoadingExample(true);
+    setExampleSentence(null);
+
+    try {
+      // Extract page context from the parent element
+      const parentElement = anchorEl.parentElement;
+      const pageContext = parentElement?.textContent?.trim() || "";
+
+      console.log(
+        `[WordHoverCard] Generating example for "${wordData.translated}" with context: "${pageContext.substring(0, 100)}..."`
+      );
+
+      const example = await exampleSentenceService.generateExampleSentence(
+        wordData.english,
+        wordData.translated,
+        language,
+        pageContext
+      );
+
+      setExampleSentence(example);
+
+      // Cache the example
+      setCachedExamples((prev) => ({
+        ...prev,
+        [wordKey]: example,
+      }));
+
+      console.log("[WordHoverCard] Example sentence generated and cached");
+    } catch (error) {
+      console.error("[WordHoverCard] Failed to generate example:", error);
+      setExampleSentence({
+        target: "Example unavailable",
+        english: "Could not generate example sentence",
+      });
+    } finally {
+      setIsLoadingExample(false);
+    }
+  };
 
   const handleSpeak = async () => {
     if (!wordData) return;
@@ -159,6 +220,38 @@ export function WordHoverCard({
                       {timesEncountered === 1 ? "time" : "times"}
                     </span>
                   </div>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-gray-100" />
+
+                {/* Example Sentence Section */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-indigo-600" />
+                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Example Sentence
+                    </span>
+                  </div>
+
+                  {isLoadingExample ? (
+                    // Skeleton loading
+                    <div className="space-y-2 animate-pulse">
+                      <div className="h-4 bg-gray-200 rounded w-full"></div>
+                      <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                      <div className="h-3 bg-gray-100 rounded w-full"></div>
+                    </div>
+                  ) : exampleSentence ? (
+                    // Example sentence content
+                    <div className="space-y-1.5 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                      <p className="text-sm font-semibold text-indigo-700 leading-relaxed">
+                        {exampleSentence.target}
+                      </p>
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        {exampleSentence.english}
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Divider */}
