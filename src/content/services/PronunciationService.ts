@@ -52,6 +52,16 @@ class PronunciationService {
    */
   async startRecording(): Promise<void> {
     try {
+      // Check if permission is already granted to avoid unnecessary prompts
+      const permissionStatus = await navigator.permissions.query({
+        name: "microphone" as PermissionName,
+      });
+
+      if (permissionStatus.state === "denied") {
+        throw new Error("Microphone permission denied");
+      }
+
+      // Get media stream (will prompt only if permission state is 'prompt')
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this.audioChunks = [];
 

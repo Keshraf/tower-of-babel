@@ -24,7 +24,7 @@ export async function createRewriter(
   onProgress?: (progress: number) => void
 ): Promise<any> {
   const options = {
-    sharedContext: `You are helping translate English content to ${config.targetLanguage} for language learners at the ${config.difficulty} level. Maintain context and meaning while choosing appropriate words to translate.`,
+    sharedContext: `You are helping translate English content to ${config.activeLanguage} for language learners at the ${config.difficulty} level. Maintain context and meaning while choosing appropriate words to translate.`,
     tone: "as-is" as const,
     format: "plain-text" as const,
     length: "as-is" as const,
@@ -255,7 +255,7 @@ export async function translateSentence(
     const translations = await translateWords(
       sentence,
       wordsToTranslate,
-      config.targetLanguage,
+      config.activeLanguage,
       rewriter
     );
 

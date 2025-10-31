@@ -149,12 +149,20 @@ async function handleLanguageChange(
  * Inject microphone permission iframe
  */
 function injectMicrophonePermissionIframe(): void {
+  // Check if iframe already exists to prevent duplicate creation
+  const existingIframe = document.getElementById("permissionsIFrame");
+  if (existingIframe) {
+    console.log("Microphone permission iframe already exists");
+    return;
+  }
+
   const iframe = document.createElement("iframe");
   iframe.setAttribute("hidden", "hidden");
   iframe.setAttribute("id", "permissionsIFrame");
   iframe.setAttribute("allow", "microphone");
   iframe.src = chrome.runtime.getURL("src/permission/index.html");
   document.body.appendChild(iframe);
+  console.log("Microphone permission iframe injected");
 }
 
 /**
