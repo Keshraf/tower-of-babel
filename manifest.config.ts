@@ -14,7 +14,13 @@ export default defineManifest({
     },
     default_popup: "src/popup/index.html",
   },
-  permissions: ["sidePanel", "contentSettings", "storage", "activeTab"],
+  permissions: [
+    "sidePanel",
+    "contentSettings",
+    "storage",
+    "activeTab",
+    "audioCapture",
+  ],
   background: {
     service_worker: "src/background/service-worker.ts",
     type: "module",
@@ -30,8 +36,12 @@ export default defineManifest({
   },
   web_accessible_resources: [
     {
-      resources: ["public/Logo.png"],
-      matches: ["https://*/*"],
+      resources: [
+        "public/Logo.png",
+        "src/permission/index.html",
+        "src/permission/requestPermission.ts",
+      ],
+      matches: ["<all_urls>"],
     },
   ],
 });

@@ -146,6 +146,18 @@ async function handleLanguageChange(
 }
 
 /**
+ * Inject microphone permission iframe
+ */
+function injectMicrophonePermissionIframe(): void {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("hidden", "hidden");
+  iframe.setAttribute("id", "permissionsIFrame");
+  iframe.setAttribute("allow", "microphone");
+  iframe.src = chrome.runtime.getURL("src/permission/index.html");
+  document.body.appendChild(iframe);
+}
+
+/**
  * Mount React app
  */
 function mountReactApp(): void {
@@ -165,6 +177,9 @@ function mountReactApp(): void {
  * Start the extension
  */
 async function startExtension(): Promise<void> {
+  // Inject microphone permission iframe first
+  injectMicrophonePermissionIframe();
+
   // Always mount React (for hover card)
   mountReactApp();
 
