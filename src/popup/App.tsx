@@ -1,11 +1,22 @@
 import { useState, useEffect } from "react";
-import "./App.css";
 import {
   SUPPORTED_LANGUAGES,
   type SupportedLanguage,
   type LanguageStats,
 } from "../content/utils/translationConfig";
 import { storageService } from "../content/services/StorageService";
+import { MixedQuizView } from "./components/MixedQuizView";
+import { SettingsView } from "./components/SettingsView";
+import { Button } from "../components/ui/button";
+import {
+  Globe,
+  Power,
+  PowerOff,
+  BookOpen,
+  FileText,
+  Brain,
+  Settings,
+} from "lucide-react";
 
 interface StorageState {
   onboardingComplete: boolean;
@@ -25,6 +36,8 @@ function App() {
     totalPagesTranslated: 0,
     lastActiveDate: new Date().toISOString(),
   });
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     loadState();
@@ -122,31 +135,56 @@ function App() {
 
   if (loading) {
     return (
-      <div className="popup-container">
-        <div className="loading">Loading...</div>
+      <div className="flex items-center justify-center w-full h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+        <div className="text-center space-y-2">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
+          <p className="text-sm text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (showQuiz) {
+    return (
+      <div className="w-full min-h-screen bg-white">
+        <MixedQuizView
+          language={state.activeLanguage}
+          onBack={() => setShowQuiz(false)}
+        />
+      </div>
+    );
+  }
+
+  if (showSettings) {
+    return (
+      <div className="w-full min-h-screen bg-white">
+        <SettingsView onBack={() => setShowSettings(false)} />
       </div>
     );
   }
 
   return (
-    <div className="popup-container">
-      <header className="header">
-        <div className="logo">
-          <span className="icon">🌍</span>
-          <h1>Language Learning</h1>
+    <div className="w-full min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-4">
+        <div className="flex items-center gap-2">
+          <Globe className="w-6 h-6 text-blue-600" />
+          <h1 className="text-lg font-bold text-gray-900">Tower of Babel</h1>
         </div>
-      </header>
+      </div>
 
-      <div className="content">
-        {/* Language Selector */}
-        <div className="language-selector">
-          <label htmlFor="language-select">Learning Language</label>
+      <div className="p-4 space-y-4">
+        {/* Language Selector Card */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2 block">
+            Learning Language
+          </label>
           <select
-            id="language-select"
             value={state.activeLanguage}
             onChange={(e) =>
               handleLanguageChange(e.target.value as SupportedLanguage)
             }
+            className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             {Object.entries(SUPPORTED_LANGUAGES).map(([key, info]) => (
               <option key={key} value={key}>
@@ -156,64 +194,103 @@ function App() {
           </select>
         </div>
 
-        {/* Toggle Section */}
-        <div className="toggle-section">
-          <div className="toggle-info">
-            <h2>Translation</h2>
-            <p
-              className={`toggle-status ${
-                !state.translationEnabled ? "disabled" : ""
+        {/* Translation Toggle Card */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {state.translationEnabled ? (
+                <Power className="w-5 h-5 text-green-600" />
+              ) : (
+                <PowerOff className="w-5 h-5 text-gray-400" />
+              )}
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">
+                  Translation
+                </h2>
+                <p
+                  className={`text-xs ${
+                    state.translationEnabled
+                      ? "text-green-600"
+                      : "text-gray-500"
+                  }`}
+                >
+                  {state.translationEnabled ? "Active" : "Inactive"}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => handleToggle(!state.translationEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                state.translationEnabled ? "bg-blue-600" : "bg-gray-300"
               }`}
             >
-              {state.translationEnabled ? "Enabled" : "Disabled"}
-            </p>
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  state.translationEnabled ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
           </div>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={state.translationEnabled}
-              onChange={(e) => handleToggle(e.target.checked)}
-            />
-            <span className="slider"></span>
-          </label>
         </div>
 
-        {/* Stats */}
-        <div className="stats">
-          <div className="stat-item">
-            <span className="stat-label">Words Learned</span>
-            <span className="stat-value">{stats.totalWordsEncountered}</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">Pages Translated</span>
-            <span className="stat-value">{stats.totalPagesTranslated}</span>
+        {/* Stats Card */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
+            Your Progress
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-blue-600" />
+                <span className="text-xs text-gray-600">Words</span>
+              </div>
+              <p className="text-2xl font-bold text-gray-900">
+                {stats.totalWordsEncountered}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-indigo-600" />
+                <span className="text-xs text-gray-600">Pages</span>
+              </div>
+              <p className="text-2xl font-bold text-gray-900">
+                {stats.totalPagesTranslated}
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="actions">
-          <button
-            className="action-btn"
-            onClick={() => console.log("Settings")}
+        <div className="space-y-2">
+          <Button
+            onClick={() => setShowQuiz(true)}
+            variant="default"
+            className="w-full gap-2 h-11"
           >
-            <span>⚙️</span>
-            Settings
-          </button>
-          <button
-            className="action-btn"
-            onClick={() => console.log("Practice")}
-          >
-            <span>📝</span>
+            <Brain className="w-5 h-5" />
             Practice Quiz
-          </button>
+          </Button>
+          <Button
+            onClick={() => setShowSettings(true)}
+            variant="outline"
+            className="w-full gap-2 h-11"
+          >
+            <Settings className="w-5 h-5" />
+            Settings
+          </Button>
         </div>
       </div>
 
-      <footer className="footer">
-        <a href="#" onClick={(e) => e.preventDefault()}>
+      {/* Footer */}
+      <div className="px-4 py-3 text-center">
+        <a
+          href="#"
+          onClick={(e) => e.preventDefault()}
+          className="text-xs text-gray-500 hover:text-gray-700"
+        >
           Help & Feedback
         </a>
-      </footer>
+      </div>
     </div>
   );
 }
