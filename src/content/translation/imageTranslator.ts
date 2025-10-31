@@ -189,7 +189,7 @@ export async function translateImage(
 }
 
 /**
- * Find and translate all images on the page
+ * Find and translate all images on the page with parallel processing
  */
 export async function translateImages(
   language: SupportedLanguage
@@ -212,8 +212,25 @@ export async function translateImages(
   // Translate images (limit to first 10 to avoid overwhelming the API)
   const imagesToProcess = validImages.slice(0, 10);
 
-  for (const img of imagesToProcess) {
-    await translateImage(img as HTMLImageElement, language);
+  // Process 2 images at a time (API rate limiting)
+  const CONCURRENCY = 2;
+
+  for (let i = 0; i < imagesToProcess.length; i += CONCURRENCY) {
+    const batch = imagesToProcess.slice(i, i + CONCURRENCY);
+
+    console.log(`[ImageTranslator] Processing images ${i + 1}-${Math.min(i + CONCURRENCY, imagesToProcess.length)} of ${imagesToProcess.length}`);
+
+    // Process this batch in parallel
+    const results = await Promise.allSettled(
+      batch.map(img => translateImage(img as HTMLImageElement, language))
+    );
+
+    // Log any failures
+    results.forEach((result, idx) => {
+      if (result.status === 'rejected') {
+        console.error(`[ImageTranslator] Image ${i + idx + 1} failed:`, result.reason);
+      }
+    });
   }
 
   console.log("[ImageTranslator] Image translation complete!");

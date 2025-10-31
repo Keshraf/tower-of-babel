@@ -141,7 +141,7 @@ ORIGINAL ENGLISH TEXT:
 FRENCH TRANSLATION:
 "${translatedText}"
 
-TASK: Select exactly ${targetWordCount} words from the ORIGINAL English text that should be translated for learning.
+TASK: Select EXACTLY ${targetWordCount} words from the ORIGINAL English text that should be translated for learning.
 
 SELECTION CRITERIA:
 ${difficultyGuidance}
@@ -149,15 +149,19 @@ ${difficultyGuidance}
 RULES:
 1. Select ONLY words that appear in the original English text
 2. Do NOT select proper nouns (names, places, brands)
-3. Do NOT select very common words (the, a, an, is, are, was, were, be, been, have, has, had, do, does, did, will, would, etc.)
-4. Do NOT select punctuation
-5. Match each English word with its corresponding French translation
+3. Do NOT select very common words (the, a, an, is, are, was, were, be, been, have, has, had, do, does, did, will, would, shall, should, can, could, may, might, must, etc.)
+4. Do NOT select punctuation or articles
+5. Match each English word with its corresponding ${config.activeLanguage} translation
 6. Return words in lowercase
-7. Select exactly ${targetWordCount} words (or fewer if not enough suitable words exist)
+7. You MUST select exactly ${targetWordCount} words - this is critical for the learning experience
+8. Prefer nouns, verbs, adjectives, and adverbs - these are valuable for learning
 
-IMPORTANT: We will use these word pairs to find and replace ALL occurrences of each word in the text.
+IMPORTANT:
+- Prioritize selecting the full ${targetWordCount} words
+- Include common everyday words that are useful for learners (like food items, actions, descriptive words)
+- We will replace ALL occurrences of each word in the text
 
-Return a JSON object with a "words" array containing simple word pairs.
+Return a JSON object with a "words" array containing exactly ${targetWordCount} word pairs.
 
 Example format:
 {
@@ -168,7 +172,7 @@ Example format:
 }`;
 
     try {
-      console.log(`Selecting ${targetWordCount} words from batch...`);
+      console.log(`[PromptService] Target: ${targetWordCount} words from ${words.length} total words (density: ${config.density})`);
 
       const result = await this.session.prompt(prompt, {
         responseConstraint: schema,
@@ -177,14 +181,21 @@ Example format:
       const parsed: WordPairResponse = JSON.parse(result);
       const wordPairs = parsed.words || [];
 
-      console.log(`Selected ${wordPairs.length} word pairs:`, wordPairs);
+      console.log(`[PromptService] AI selected ${wordPairs.length}/${targetWordCount} word pairs`);
 
       // Validate that words exist in original text
       const validPairs = this.validateWordPairs(wordPairs, originalText);
 
+      console.log(`[PromptService] After validation: ${validPairs.length} valid word pairs`);
+
+      // Log warning if we got significantly fewer words than requested
+      if (validPairs.length < targetWordCount * 0.7) {
+        console.warn(`[PromptService] Low word count: ${validPairs.length}/${targetWordCount} (${Math.round(validPairs.length/targetWordCount*100)}%)`);
+      }
+
       return validPairs;
     } catch (error) {
-      console.error("Error selecting words from batch:", error);
+      console.error("[PromptService] Error selecting words from batch:", error);
       // Return empty array on error
       return [];
     }

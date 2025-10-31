@@ -82,7 +82,14 @@ export async function translatePage(): Promise<void> {
         return;
       }
 
-      await translateAndReplaceBatches(visibleBatches);
+      // Process batches with streaming progress updates
+      await translateAndReplaceBatches(
+        visibleBatches,
+        3, // Process 3 batches concurrently
+        (completed, total) => {
+          console.log(`Progress: ${completed}/${total} batches translated`);
+        }
+      );
     }
 
     // Check again before setting up progressive loading
@@ -105,7 +112,13 @@ export async function translatePage(): Promise<void> {
         const batches = batchSentences(sentences, 5);
 
         console.log(`Lazily processing ${batches.length} batches`);
-        await translateAndReplaceBatches(batches);
+        await translateAndReplaceBatches(
+          batches,
+          3, // Process 3 batches concurrently
+          (completed, total) => {
+            console.log(`Lazy load progress: ${completed}/${total} batches translated`);
+          }
+        );
       });
 
       loader.observe(hidden);

@@ -28,12 +28,14 @@ export function setTooltipHandler(handler: WordHoverHandler): void {
 }
 
 /**
- * Translate and replace sentence batches using regex
+ * Translate and replace sentence batches using regex with parallel processing
  */
 export async function translateAndReplaceBatches(
-  batches: SentenceBatch[]
+  batches: SentenceBatch[],
+  concurrency: number = 3,
+  onBatchComplete?: (completed: number, total: number) => void
 ): Promise<void> {
-  console.log(`Processing ${batches.length} sentence batches`);
+  console.log(`Processing ${batches.length} sentence batches with concurrency ${concurrency}`);
 
   if (!translationService.isInitialized()) {
     console.warn("Translation service not initialized, skipping translation");
@@ -50,26 +52,56 @@ export async function translateAndReplaceBatches(
   const translatorService = translationService.getTranslatorService();
   const config = translationService.getConfig();
 
-  // Process each batch
-  for (const batch of batches) {
-    // Check if we should continue before each batch
+  let completed = 0;
+
+  // Process batches in parallel with limited concurrency
+  for (let i = 0; i < batches.length; i += concurrency) {
+    // Check if we should continue before each batch group
     if (!translationState.shouldContinue()) {
       console.log("Translation cancelled mid-processing");
       return;
     }
 
-    try {
-      await processBatch(batch, promptService, translatorService, config);
-    } catch (error) {
-      // Check if it was an abort
-      if (error instanceof Error && error.name === "AbortError") {
-        console.log("Batch processing aborted");
-        return;
+    // Get next N batches to process in parallel
+    const batchGroup = batches.slice(i, i + concurrency);
+
+    // Process this group in parallel
+    const results = await Promise.allSettled(
+      batchGroup.map(batch =>
+        processBatch(batch, promptService, translatorService, config)
+      )
+    );
+
+    // Update progress and log any failures
+    results.forEach((result, idx) => {
+      if (result.status === 'fulfilled') {
+        completed++;
+        console.log(`Batch ${i + idx + 1}/${batches.length} completed`);
+        onBatchComplete?.(completed, batches.length);
+      } else {
+        // Check if it was an abort
+        if (result.reason instanceof Error && result.reason.name === "AbortError") {
+          console.log("Batch processing aborted");
+          return;
+        }
+        console.error(`Batch ${i + idx + 1} failed:`, result.reason);
       }
-      console.error("Error processing batch:", error);
-      // Continue with next batch even if one fails
+    });
+
+    // If any batch was aborted, stop processing
+    const wasAborted = results.some(
+      result => result.status === 'rejected' &&
+                result.reason instanceof Error &&
+                result.reason.name === 'AbortError'
+    );
+
+    if (wasAborted) {
+      console.log("Translation aborted, stopping batch processing");
+      return;
     }
   }
+
+  console.log(`Completed processing ${completed}/${batches.length} batches`);
 }
 
 /**
