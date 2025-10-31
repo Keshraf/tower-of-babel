@@ -45,6 +45,41 @@ h1 {
   background: white;
 }
 
+/* Language Selector */
+.language-selector {
+  margin-bottom: 20px;
+}
+
+.language-selector label {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+#language-select {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+#language-select:hover {
+  border-color: #9ca3af;
+}
+
+#language-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Toggle Section */
 .toggle-section {
   display: flex;
   justify-content: space-between;

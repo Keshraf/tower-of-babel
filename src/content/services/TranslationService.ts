@@ -2,15 +2,19 @@ import {
   TranslationConfig,
   getTranslationConfig as loadConfig,
   setTranslationConfig,
+  getLanguageCode,
+  type SupportedLanguage,
 } from "../utils/translationConfig";
 import { promptService } from "./PromptService";
 import { translatorService } from "./TranslatorService";
+import { storageService } from "./StorageService";
 
 /**
  * Main translation service that orchestrates Prompt API and Translator API
  */
 class TranslationService {
   private config: TranslationConfig | null = null;
+  private currentLanguage: SupportedLanguage | null = null;
   private initPromise: Promise<void> | null = null;
 
   /**
@@ -30,10 +34,11 @@ class TranslationService {
       this.config = await loadConfig();
       console.log("Translation config loaded:", this.config);
 
-      // Get target language code (default to 'fr' for French)
-      const targetLanguageCode = this.getLanguageCode(
-        this.config.targetLanguage
-      );
+      const activeLanguage = this.config.activeLanguage;
+      this.currentLanguage = activeLanguage;
+
+      // Get language code for Translator API
+      const targetLanguageCode = getLanguageCode(activeLanguage);
 
       try {
         // Initialize Prompt API for word selection
@@ -55,6 +60,9 @@ class TranslationService {
           }
         );
 
+        // Mark language as downloaded
+        await storageService.setLanguageDownloaded(activeLanguage);
+
         onProgress?.(100, "Ready!");
         console.log("All translation services initialized successfully");
       } catch (error) {
@@ -67,34 +75,49 @@ class TranslationService {
   }
 
   /**
-   * Convert language name to BCP 47 code
+   * Switch to a different language
    */
-  private getLanguageCode(languageName: string): string {
-    const languageCodes: Record<string, string> = {
-      french: "fr",
-      spanish: "es",
-      german: "de",
-      italian: "it",
-      portuguese: "pt",
-      japanese: "ja",
-    };
+  async switchLanguage(
+    newLanguage: SupportedLanguage,
+    onProgress?: (progress: number, stage: string) => void
+  ): Promise<void> {
+    console.log(
+      `Switching language from ${this.currentLanguage} to ${newLanguage}`
+    );
 
-    const normalized = languageName.toLowerCase();
-    return languageCodes[normalized] || "fr"; // Default to French
+    // Update config
+    await setTranslationConfig({ activeLanguage: newLanguage });
+    this.config = await loadConfig();
+
+    // Reset services
+    this.reset();
+
+    // Re-initialize with new language
+    this.currentLanguage = newLanguage;
+    await this.initialize(onProgress);
+
+    console.log(`Language switched to ${newLanguage} successfully`);
   }
 
   /**
-   * Update configuration and reinitialize services
+   * Update configuration and reinitialize services if language changed
    */
   async updateConfig(newConfig: Partial<TranslationConfig>): Promise<void> {
     console.log("Updating translation config:", newConfig);
 
+    const currentLanguage = this.config?.activeLanguage;
+    const newLanguage = newConfig.activeLanguage;
+
     // Save to storage
     await setTranslationConfig(newConfig);
 
-    // Reset and reinitialize
-    this.reset();
-    await this.initialize();
+    // If language changed, need to reinitialize
+    if (newLanguage && newLanguage !== currentLanguage) {
+      await this.switchLanguage(newLanguage);
+    } else {
+      // Just update config
+      this.config = await loadConfig();
+    }
   }
 
   /**
@@ -128,11 +151,22 @@ class TranslationService {
   }
 
   /**
+   * Get current active language
+   */
+  getCurrentLanguage(): SupportedLanguage {
+    if (!this.currentLanguage) {
+      throw new Error("Translation service not initialized");
+    }
+    return this.currentLanguage;
+  }
+
+  /**
    * Check if all services are initialized
    */
   isInitialized(): boolean {
     return (
       this.config !== null &&
+      this.currentLanguage !== null &&
       promptService.isInitialized() &&
       translatorService.isInitialized()
     );
@@ -145,6 +179,7 @@ class TranslationService {
     promptService.reset();
     translatorService.reset();
     this.config = null;
+    this.currentLanguage = null;
     this.initPromise = null;
   }
 }

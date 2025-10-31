@@ -36,6 +36,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
   }
 
+  if (message.type === "LANGUAGE_CHANGED") {
+    console.log("Language changed:", message.language);
+
+    // Broadcast to all tabs to switch language
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach((tab) => {
+        if (tab.id) {
+          chrome.tabs
+            .sendMessage(tab.id, {
+              type: "LANGUAGE_CHANGED",
+              language: message.language,
+            })
+            .catch(() => {
+              // Ignore errors for tabs that don't have content script
+            });
+        }
+      });
+    });
+  }
+
   sendResponse({ success: true });
   return true;
 });

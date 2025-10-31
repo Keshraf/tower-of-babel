@@ -3,9 +3,11 @@ import { useEffect } from "react";
 import { TooltipProvider, useTooltip } from "./contexts/TooltipContext";
 import TooltipPortal from "./components/TooltipPortal";
 import { translationService } from "./services/TranslationService";
+import { storageService } from "./services/StorageService";
 import { translatePage, stopTranslation } from "./translation/pageTranslator";
 import { clearTranslations } from "./translation/translationCleaner";
 import { setTooltipHandler } from "./translation/nodeTranslator";
+import type { SupportedLanguage } from "./utils/translationConfig";
 
 function TooltipContextExporter() {
   const tooltip = useTooltip();
@@ -18,24 +20,23 @@ function TooltipContextExporter() {
 }
 
 /**
- * Check if models are downloaded and translation is enabled
+ * Check if onboarding is complete and translation is enabled
  */
 async function shouldInitialize(): Promise<boolean> {
   try {
-    const result = await chrome.storage.local.get([
-      "modelsDownloaded",
-      "translationEnabled",
-    ]);
+    const result = await chrome.storage.local.get(["config", "system"]);
+    const config = result.config || {};
+    const system = result.system || {};
 
-    const modelsDownloaded = result.modelsDownloaded || false;
-    const translationEnabled = result.translationEnabled !== false;
+    const onboardingComplete = system.onboardingComplete || false;
+    const translationEnabled = config.translationEnabled !== false;
 
     console.log("Initialization check:", {
-      modelsDownloaded,
+      onboardingComplete,
       translationEnabled,
     });
 
-    return modelsDownloaded && translationEnabled;
+    return onboardingComplete && translationEnabled;
   } catch (error) {
     console.error("Error checking initialization status:", error);
     return false;
@@ -49,7 +50,7 @@ async function initializeAndTranslate(): Promise<void> {
   console.log("Initializing translation extension...");
 
   try {
-    // Initialize services (no download needed - already done in onboarding!)
+    // Initialize services
     await translationService.initialize((progress, stage) => {
       console.log(`[${progress.toFixed(0)}%] ${stage}`);
     });
@@ -58,6 +59,10 @@ async function initializeAndTranslate(): Promise<void> {
 
     // Translate the page
     await translatePage();
+
+    // Increment page count
+    const language = translationService.getCurrentLanguage();
+    await storageService.incrementStat(language, "totalPagesTranslated");
 
     console.log("Page translation complete!");
   } catch (error) {
@@ -72,6 +77,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "UPDATE_TRANSLATION_STATE") {
     handleToggleChange(message.enabled);
   }
+
+  if (message.type === "LANGUAGE_CHANGED") {
+    handleLanguageChange(message.language);
+  }
+
   sendResponse({ success: true });
   return true;
 });
@@ -93,6 +103,44 @@ async function handleToggleChange(enabled: boolean): Promise<void> {
 
     // Then clear existing translations from the page
     clearTranslations();
+  }
+}
+
+/**
+ * Handle language change from popup
+ */
+async function handleLanguageChange(
+  newLanguage: SupportedLanguage
+): Promise<void> {
+  console.log(`Language changed to ${newLanguage}`);
+
+  try {
+    // Step 1: Stop any ongoing translation
+    stopTranslation();
+
+    // Step 2: Clear existing translations from the page
+    clearTranslations();
+
+    // Step 3: Reset and switch language
+    translationService.reset();
+    await translationService.switchLanguage(newLanguage);
+
+    // Step 4: Re-translate page with new language if enabled
+    const result = await chrome.storage.local.get("config");
+    const config = result.config || {};
+    const isEnabled = config.translationEnabled !== false;
+
+    if (isEnabled) {
+      console.log("Re-translating page with new language...");
+      await translatePage();
+
+      // Increment page count for new language
+      await storageService.incrementStat(newLanguage, "totalPagesTranslated");
+    }
+
+    console.log("Language change complete!");
+  } catch (error) {
+    console.error("Error handling language change:", error);
   }
 }
 
@@ -124,12 +172,12 @@ async function startExtension(): Promise<void> {
 
   if (shouldStart) {
     console.log(
-      "Models downloaded and translation enabled - starting automatically"
+      "Onboarding complete and translation enabled - starting automatically"
     );
     await initializeAndTranslate();
   } else {
     console.log(
-      "Translation disabled or models not downloaded - waiting for user action"
+      "Translation disabled or onboarding not complete - waiting for user action"
     );
   }
 }

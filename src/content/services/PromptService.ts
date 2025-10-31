@@ -133,7 +133,7 @@ class PromptService {
     // Get difficulty-specific guidance
     const difficultyGuidance = this.getDifficultyGuidance(config.difficulty);
 
-    const prompt = `You are helping a ${config.difficulty} level ${config.targetLanguage} learner select words to practice.
+    const prompt = `You are helping a ${config.difficulty} level ${config.activeLanguage} learner select words to practice.
 
 ORIGINAL ENGLISH TEXT:
 "${originalText}"
