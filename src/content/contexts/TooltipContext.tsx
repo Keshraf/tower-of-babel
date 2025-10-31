@@ -1,43 +1,72 @@
 import { createContext, useContext, useState, ReactNode } from "react";
+import type { SupportedLanguage } from "../utils/translationConfig";
 
 interface WordData {
   english: string;
-  french: string;
+  translated: string;
 }
 
-interface TooltipState {
+interface WordHoverContextValue {
   wordData: WordData | null;
-  position: { x: number; y: number };
-  show: (data: WordData, x: number, y: number) => void;
+  isOpen: boolean;
+  anchorEl: HTMLElement | null;
+  language: SupportedLanguage;
+  show: (data: WordData, element: HTMLElement, lang: SupportedLanguage) => void;
   hide: () => void;
 }
 
-const TooltipContext = createContext<TooltipState | null>(null);
+const WordHoverContext = createContext<WordHoverContextValue | undefined>(
+  undefined
+);
 
-export function TooltipProvider({ children }: { children: ReactNode }) {
+export function WordHoverProvider({ children }: { children: ReactNode }) {
   const [wordData, setWordData] = useState<WordData | null>(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isOpen, setIsOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [language, setLanguage] = useState<SupportedLanguage>("french");
 
-  const show = (data: WordData, x: number, y: number) => {
+  const show = (
+    data: WordData,
+    element: HTMLElement,
+    lang: SupportedLanguage
+  ) => {
     setWordData(data);
-    setPosition({ x, y });
+    setAnchorEl(element);
+    setLanguage(lang);
+    setIsOpen(true);
   };
 
   const hide = () => {
+    // Just clear the data, let Radix handle the closing
     setWordData(null);
+    setAnchorEl(null);
+    setIsOpen(false);
   };
 
   return (
-    <TooltipContext.Provider value={{ wordData, position, show, hide }}>
+    <WordHoverContext.Provider
+      value={{
+        wordData,
+        isOpen,
+        anchorEl,
+        language,
+        show,
+        hide,
+      }}
+    >
       {children}
-    </TooltipContext.Provider>
+    </WordHoverContext.Provider>
   );
 }
 
-export function useTooltip() {
-  const context = useContext(TooltipContext);
+export function useWordHover() {
+  const context = useContext(WordHoverContext);
   if (!context) {
-    throw new Error("useTooltip must be used within TooltipProvider");
+    throw new Error("useWordHover must be used within WordHoverProvider");
   }
   return context;
 }
+
+// Legacy export for backward compatibility
+export const TooltipProvider = WordHoverProvider;
+export const useTooltip = useWordHover;

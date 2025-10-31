@@ -6,22 +6,22 @@ import type { WordPair } from "../services/PromptService";
 
 interface WordData {
   english: string;
-  french: string;
+  translated: string;
 }
 
-interface TooltipHandler {
-  show: (data: WordData, x: number, y: number) => void;
+interface WordHoverHandler {
+  show: (data: WordData, element: HTMLElement, language: any) => void;
   hide: () => void;
 }
 
-// Store tooltip handler so DOM event handlers can access it
-let tooltipHandler: TooltipHandler | null = null;
+// Store hover handler so DOM event handlers can access it
+let hoverHandler: WordHoverHandler | null = null;
 
 /**
- * Set the tooltip handler from React context
+ * Set the hover handler from React context
  */
-export function setTooltipHandler(handler: TooltipHandler): void {
-  tooltipHandler = handler;
+export function setTooltipHandler(handler: WordHoverHandler): void {
+  hoverHandler = handler;
 }
 
 /**
@@ -209,7 +209,7 @@ function replaceWordInNode(
     const span = createTranslatedWordSpan(match.word, translatedWithCase);
     fragment.appendChild(span);
 
-    // CRITICAL: Record this word encounter in storage
+    // Record this word encounter in storage
     const language = translationService.getCurrentLanguage();
     storageService.recordWordEncounter(
       language,
@@ -272,29 +272,29 @@ function createTranslatedWordSpan(
     "background: #A5BFDF4D; cursor: pointer; transition: background 0.2s; display: inline-block; border-radius: 2px; line-height: normal; width: max-content; height: max-content; padding: 0 2px;";
 
   // Store data attributes
-  span.dataset.original = originalWord;
-  span.dataset.translation = translatedWord;
+  span.dataset.english = originalWord;
+  span.dataset.translated = translatedWord;
 
-  // Add hover listeners
+  // Add hover listeners with current language
   span.addEventListener("mouseenter", () => {
     span.style.background = "#A5BFDF80";
 
-    if (tooltipHandler) {
-      const rect = span.getBoundingClientRect();
-      tooltipHandler.show(
+    if (hoverHandler) {
+      const language = translationService.getCurrentLanguage();
+      hoverHandler.show(
         {
           english: originalWord,
-          french: translatedWord,
+          translated: translatedWord,
         },
-        rect.left,
-        rect.bottom + window.scrollY
+        span,
+        language
       );
     }
   });
 
   span.addEventListener("mouseleave", () => {
     span.style.background = "#A5BFDF4D";
-    tooltipHandler?.hide();
+    // Radix HoverCard automatically handles staying open when hovering over content
   });
 
   return span;

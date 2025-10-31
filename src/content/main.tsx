@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { useEffect } from "react";
-import { TooltipProvider, useTooltip } from "./contexts/TooltipContext";
+import { WordHoverProvider, useWordHover } from "./contexts/TooltipContext";
 import TooltipPortal from "./components/TooltipPortal";
 import { translationService } from "./services/TranslationService";
 import { storageService } from "./services/StorageService";
@@ -8,13 +8,14 @@ import { translatePage, stopTranslation } from "./translation/pageTranslator";
 import { clearTranslations } from "./translation/translationCleaner";
 import { setTooltipHandler } from "./translation/nodeTranslator";
 import type { SupportedLanguage } from "./utils/translationConfig";
+import "./content.css";
 
-function TooltipContextExporter() {
-  const tooltip = useTooltip();
+function WordHoverContextExporter() {
+  const wordHover = useWordHover();
 
   useEffect(() => {
-    setTooltipHandler(tooltip);
-  }, [tooltip]);
+    setTooltipHandler(wordHover);
+  }, [wordHover]);
 
   return null;
 }
@@ -148,15 +149,15 @@ async function handleLanguageChange(
  * Mount React app
  */
 function mountReactApp(): void {
-  const tooltipContainer = document.createElement("div");
-  tooltipContainer.id = "language-tooltip-root";
-  document.body.appendChild(tooltipContainer);
+  const hoverContainer = document.createElement("div");
+  hoverContainer.id = "language-hover-root";
+  document.body.appendChild(hoverContainer);
 
-  createRoot(tooltipContainer).render(
-    <TooltipProvider>
-      <TooltipContextExporter />
+  createRoot(hoverContainer).render(
+    <WordHoverProvider>
+      <WordHoverContextExporter />
       <TooltipPortal />
-    </TooltipProvider>
+    </WordHoverProvider>
   );
 }
 
@@ -164,7 +165,7 @@ function mountReactApp(): void {
  * Start the extension
  */
 async function startExtension(): Promise<void> {
-  // Always mount React (for tooltip)
+  // Always mount React (for hover card)
   mountReactApp();
 
   // Check if we should initialize

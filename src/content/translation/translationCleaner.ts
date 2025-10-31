@@ -7,7 +7,7 @@ export function clearTranslations(): void {
   const translatedWords = document.querySelectorAll(".translated-word");
 
   translatedWords.forEach((span) => {
-    const originalWord = span.getAttribute("data-original");
+    const originalWord = span.getAttribute("data-english");
     if (originalWord) {
       // Create a text node with the original word
       const textNode = document.createTextNode(originalWord);
@@ -40,7 +40,7 @@ export function clearTranslationsInElement(element: Element): void {
   const translatedWords = element.querySelectorAll(".translated-word");
 
   translatedWords.forEach((span) => {
-    const originalWord = span.getAttribute("data-original");
+    const originalWord = span.getAttribute("data-english");
     if (originalWord) {
       const textNode = document.createTextNode(originalWord);
       span.parentNode?.replaceChild(textNode, span);
