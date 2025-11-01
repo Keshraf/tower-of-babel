@@ -376,6 +376,64 @@ class StorageService {
       return [];
     }
   }
+
+  /**
+   * Check if Prompt API model is downloaded
+   */
+  async isPromptModelDownloaded(): Promise<boolean> {
+    try {
+      const result = await chrome.storage.local.get("system");
+      const system = result.system || {};
+      return system.promptModelDownloaded || false;
+    } catch (error) {
+      console.error("Error checking prompt model download:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Mark Prompt API model as downloaded
+   */
+  async setPromptModelDownloaded(): Promise<void> {
+    try {
+      const result = await chrome.storage.local.get("system");
+      const system = result.system || {};
+      system.promptModelDownloaded = true;
+      await chrome.storage.local.set({ system });
+      console.log("Prompt API model marked as downloaded");
+    } catch (error) {
+      console.error("Error setting prompt model downloaded:", error);
+    }
+  }
+
+  /**
+   * Check if Rewriter API model is downloaded
+   */
+  async isRewriterDownloaded(): Promise<boolean> {
+    try {
+      const result = await chrome.storage.local.get("system");
+      const system = result.system || {};
+      return system.rewriterDownloaded || false;
+    } catch (error) {
+      console.error("Error checking rewriter download:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Mark Rewriter API model as downloaded
+   */
+  async setRewriterDownloaded(): Promise<void> {
+    try {
+      const result = await chrome.storage.local.get("system");
+      const system = result.system || {};
+      system.rewriterDownloaded = true;
+      await chrome.storage.local.set({ system });
+      console.log("Rewriter API model marked as downloaded");
+    } catch (error) {
+      console.error("Error setting rewriter downloaded:", error);
+    }
+  }
 }
 
 export const storageService = new StorageService();

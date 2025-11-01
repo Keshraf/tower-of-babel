@@ -258,12 +258,19 @@ The built extension will be in the `dist` directory.
 
 **Problem**: Words aren't being translated
 
-**Solution**:
+**Solution 1**:
 
 1. Open the side panel and check if onboarding is complete
 2. Verify the page language is English (extension only translates from English)
 3. Check that Translation API is enabled: `chrome://flags/#translation-api`
 4. Try refreshing the page
+
+**Solution 2**:
+
+1. Highlight a bunch of words on a page
+2. Right click to open context menu
+3. Go to `Tower of Babel` and click on Translate
+4. Refresh Page, should work as expected.
 
 ### Extension Not Loading
 

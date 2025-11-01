@@ -6,13 +6,16 @@ import {
 } from "../content/utils/translationConfig";
 import { storageService } from "../content/services/StorageService";
 
-type Screen = "welcome" | "download" | "success";
+type Screen = "welcome" | "download-prompt" | "download-french" | "download-spanish" | "download-rewriter" | "success";
 
 interface DownloadProgress {
   prompt: number;
   french: number;
   spanish: number;
+  rewriter: number;
 }
+
+type DownloadStep = "prompt" | "french" | "spanish" | "rewriter";
 
 export default function Onboarding() {
   const [screen, setScreen] = useState<Screen>("welcome");
@@ -22,6 +25,7 @@ export default function Onboarding() {
     prompt: 0,
     french: 0,
     spanish: 0,
+    rewriter: 0,
   });
   const [status, setStatus] = useState("Initializing...");
   const [error, setError] = useState<string | null>(null);
@@ -40,101 +44,204 @@ export default function Onboarding() {
   }, []);
 
   const handleGetStarted = async () => {
-    setScreen("download");
-    await downloadModels();
+    // Check if APIs are available
+    if (!("LanguageModel" in self) || !("Translator" in self) || !("Rewriter" in self)) {
+      setError(
+        "AI APIs not available. Please enable Chrome Built-in AI at chrome://flags/#optimization-guide-on-device-model"
+      );
+      return;
+    }
+
+    // Check what's already downloaded
+    const isPromptDownloaded = await storageService.isPromptModelDownloaded();
+    const downloadedLanguages = await storageService.getDownloadedLanguages();
+
+    if (isPromptDownloaded) {
+      setProgress((prev) => ({ ...prev, prompt: 100 }));
+    }
+    if (downloadedLanguages.includes("french")) {
+      setProgress((prev) => ({ ...prev, french: 100 }));
+    }
+    if (downloadedLanguages.includes("spanish")) {
+      setProgress((prev) => ({ ...prev, spanish: 100 }));
+    }
+
+    // Start with first incomplete step
+    if (!isPromptDownloaded) {
+      setScreen("download-prompt");
+    } else if (!downloadedLanguages.includes("french")) {
+      setScreen("download-french");
+    } else if (!downloadedLanguages.includes("spanish")) {
+      setScreen("download-spanish");
+    } else {
+      setScreen("download-rewriter");
+    }
   };
 
-  const downloadModels = async () => {
+  const downloadPromptModel = async () => {
     try {
-      // Check if APIs are available
-      if (!("LanguageModel" in self) || !("Translator" in self)) {
-        throw new Error(
-          "AI APIs not available. Please enable Chrome Built-in AI at chrome://flags/#optimization-guide-on-device-model"
-        );
-      }
+      console.log("[Onboarding] Starting Prompt API download...");
 
-      // Check what's already downloaded
-      const downloadedLanguages = await storageService.getDownloadedLanguages();
-      const isPromptDownloaded = downloadedLanguages.length > 0; // If any language downloaded, Prompt API is ready
+      // Check availability first
+      const availability = await (self as any).LanguageModel.availability();
+      console.log("[Onboarding] Prompt API availability:", availability);
 
-      // Step 1: Download Prompt API (if not already downloaded)
-      if (!isPromptDownloaded) {
-        setStatus("Downloading word selection AI...");
-        const languageModelParams = await (self as any).LanguageModel.params();
+      setStatus("Downloading word selection AI...");
+      const languageModelParams = await (self as any).LanguageModel.params();
 
-        const languageModel = await (self as any).LanguageModel.create({
-          temperature: languageModelParams.defaultTemperature,
-          topK: languageModelParams.defaultTopK,
-          monitor(m: any) {
-            m.addEventListener("downloadprogress", (e: any) => {
-              const progressValue = (e.loaded / e.total) * 100;
-              setProgress((prev) => ({ ...prev, prompt: progressValue }));
-            });
-          },
-        });
+      console.log("[Onboarding] Creating LanguageModel with params:", languageModelParams);
+      const languageModel = await (self as any).LanguageModel.create({
+        temperature: languageModelParams.defaultTemperature,
+        topK: languageModelParams.defaultTopK,
+        monitor(m: any) {
+          m.addEventListener("downloadprogress", (e: any) => {
+            const progressValue = (e.loaded / e.total) * 100;
+            console.log(`[Onboarding] Prompt API download progress: ${progressValue.toFixed(1)}%`);
+            setProgress((prev) => ({ ...prev, prompt: progressValue }));
+          });
+        },
+      });
 
-        setProgress((prev) => ({ ...prev, prompt: 100 }));
-        languageModel.destroy();
-        console.log("Prompt API downloaded");
-      } else {
-        // Already downloaded, set to 100%
-        setProgress((prev) => ({ ...prev, prompt: 100 }));
-        console.log("Prompt API already downloaded");
-      }
+      console.log("[Onboarding] LanguageModel created successfully:", languageModel);
+      setProgress((prev) => ({ ...prev, prompt: 100 }));
 
-      // Step 2: Download French Translator (if not already downloaded)
-      if (!downloadedLanguages.includes("french")) {
-        setStatus("Downloading French translation engine...");
+      // Don't destroy - this would remove the downloaded model from cache
+      // Just let it be garbage collected naturally
+      // languageModel.destroy();
 
-        const frenchTranslator = await (self as any).Translator.create({
-          sourceLanguage: "en",
-          targetLanguage: "fr",
-          monitor(m: any) {
-            m.addEventListener("downloadprogress", (e: any) => {
-              const progressValue = (e.loaded / e.total) * 100;
-              setProgress((prev) => ({ ...prev, french: progressValue }));
-            });
-          },
-        });
+      // Mark Prompt API as downloaded
+      await storageService.setPromptModelDownloaded();
+      console.log("[Onboarding] ✅ Prompt API downloaded and marked as complete");
 
-        setProgress((prev) => ({ ...prev, french: 100 }));
-        frenchTranslator.destroy();
+      setStatus("Word selection AI downloaded! Click Next to continue.");
+      // Don't auto-advance - let user click Next
+    } catch (err) {
+      console.error("Error downloading Prompt API:", err);
+      setError(err instanceof Error ? err.message : "Unknown error occurred");
+      setStatus("Download failed");
+    }
+  };
 
-        // Mark as downloaded
-        await storageService.setLanguageDownloaded("french");
-        console.log("French translator downloaded");
-      } else {
-        // Already downloaded, set to 100%
-        setProgress((prev) => ({ ...prev, french: 100 }));
-        console.log("French translator already downloaded");
-      }
+  const downloadFrenchModel = async () => {
+    try {
+      console.log("[Onboarding] Starting French translator download...");
 
-      // Step 3: Download Spanish Translator (if not already downloaded)
-      if (!downloadedLanguages.includes("spanish")) {
-        setStatus("Downloading Spanish translation engine...");
+      // Check availability first
+      const availability = await (self as any).Translator.availability({
+        sourceLanguage: "en",
+        targetLanguage: "fr",
+      });
+      console.log("[Onboarding] French Translator availability:", availability);
 
-        const spanishTranslator = await (self as any).Translator.create({
-          sourceLanguage: "en",
-          targetLanguage: "es",
-          monitor(m: any) {
-            m.addEventListener("downloadprogress", (e: any) => {
-              const progressValue = (e.loaded / e.total) * 100;
-              setProgress((prev) => ({ ...prev, spanish: progressValue }));
-            });
-          },
-        });
+      setStatus("Downloading French translation engine...");
 
-        setProgress((prev) => ({ ...prev, spanish: 100 }));
-        spanishTranslator.destroy();
+      const frenchTranslator = await (self as any).Translator.create({
+        sourceLanguage: "en",
+        targetLanguage: "fr",
+        monitor(m: any) {
+          m.addEventListener("downloadprogress", (e: any) => {
+            const progressValue = (e.loaded / e.total) * 100;
+            console.log(`[Onboarding] French translator download progress: ${progressValue.toFixed(1)}%`);
+            setProgress((prev) => ({ ...prev, french: progressValue }));
+          });
+        },
+      });
 
-        // Mark as downloaded
-        await storageService.setLanguageDownloaded("spanish");
-        console.log("Spanish translator downloaded");
-      } else {
-        // Already downloaded, set to 100%
-        setProgress((prev) => ({ ...prev, spanish: 100 }));
-        console.log("Spanish translator already downloaded");
-      }
+      console.log("[Onboarding] French Translator created successfully:", frenchTranslator);
+      setProgress((prev) => ({ ...prev, french: 100 }));
+
+      // Don't destroy - this would remove the downloaded model from cache
+      // frenchTranslator.destroy();
+
+      // Mark as downloaded
+      await storageService.setLanguageDownloaded("french");
+      console.log("[Onboarding] ✅ French translator downloaded and marked as complete");
+
+      setStatus("French translator downloaded! Click Next to continue.");
+      // Don't auto-advance - let user click Next
+    } catch (err) {
+      console.error("Error downloading French translator:", err);
+      setError(err instanceof Error ? err.message : "Unknown error occurred");
+      setStatus("Download failed");
+    }
+  };
+
+  const downloadSpanishModel = async () => {
+    try {
+      console.log("[Onboarding] Starting Spanish translator download...");
+
+      // Check availability first
+      const availability = await (self as any).Translator.availability({
+        sourceLanguage: "en",
+        targetLanguage: "es",
+      });
+      console.log("[Onboarding] Spanish Translator availability:", availability);
+
+      setStatus("Downloading Spanish translation engine...");
+
+      const spanishTranslator = await (self as any).Translator.create({
+        sourceLanguage: "en",
+        targetLanguage: "es",
+        monitor(m: any) {
+          m.addEventListener("downloadprogress", (e: any) => {
+            const progressValue = (e.loaded / e.total) * 100;
+            console.log(`[Onboarding] Spanish translator download progress: ${progressValue.toFixed(1)}%`);
+            setProgress((prev) => ({ ...prev, spanish: progressValue }));
+          });
+        },
+      });
+
+      console.log("[Onboarding] Spanish Translator created successfully:", spanishTranslator);
+      setProgress((prev) => ({ ...prev, spanish: 100 }));
+
+      // Don't destroy - this would remove the downloaded model from cache
+      // spanishTranslator.destroy();
+
+      // Mark as downloaded
+      await storageService.setLanguageDownloaded("spanish");
+      console.log("[Onboarding] ✅ Spanish translator downloaded and marked as complete");
+
+      setStatus("Spanish translator downloaded! Click Next to continue.");
+      // Don't auto-advance - let user click Next
+    } catch (err) {
+      console.error("Error downloading Spanish translator:", err);
+      setError(err instanceof Error ? err.message : "Unknown error occurred");
+      setStatus("Download failed");
+    }
+  };
+
+  const downloadRewriterModel = async () => {
+    try {
+      console.log("[Onboarding] Starting Rewriter download...");
+
+      // Check availability first
+      const availability = await (self as any).Rewriter.availability();
+      console.log("[Onboarding] Rewriter availability:", availability);
+
+      setStatus("Downloading text rewriter engine...");
+
+      const rewriter = await (self as any).Rewriter.create({
+        tone: "as-is",
+        format: "plain-text",
+        length: "as-is",
+        monitor(m: any) {
+          m.addEventListener("downloadprogress", (e: any) => {
+            const progressValue = (e.loaded / e.total) * 100;
+            console.log(`[Onboarding] Rewriter download progress: ${progressValue.toFixed(1)}%`);
+            setProgress((prev) => ({ ...prev, rewriter: progressValue }));
+          });
+        },
+      });
+
+      console.log("[Onboarding] Rewriter created successfully:", rewriter);
+      setProgress((prev) => ({ ...prev, rewriter: 100 }));
+
+      // Don't destroy - this would remove the downloaded model from cache
+      // rewriter.destroy();
+
+      // Mark as downloaded
+      await storageService.setRewriterDownloaded();
+      console.log("[Onboarding] ✅ Rewriter downloaded and marked as complete");
 
       setStatus("Finalizing setup...");
 
@@ -160,15 +267,15 @@ export default function Onboarding() {
       await chrome.storage.local.set({ system });
 
       console.log(
-        "Onboarding complete! Both French and Spanish models downloaded."
+        "Onboarding complete! All models downloaded."
       );
 
       // Show success screen
       setScreen("success");
     } catch (err) {
-      console.error("Error during onboarding:", err);
+      console.error("Error downloading Rewriter:", err);
       setError(err instanceof Error ? err.message : "Unknown error occurred");
-      setStatus("Setup failed");
+      setStatus("Download failed");
     }
   };
 
@@ -204,7 +311,7 @@ export default function Onboarding() {
           <div className="language-selection">
             <h3>Which language do you want to start with?</h3>
             <p className="language-note">
-              We'll download both French and Spanish, so you can switch anytime!
+              We'll download all necessary AI models (4 downloads total)
             </p>
             <div className="language-buttons">
               {Object.entries(SUPPORTED_LANGUAGES).map(([key, info]) => (
@@ -252,14 +359,12 @@ export default function Onboarding() {
         </div>
       )}
 
-      {screen === "download" && (
+      {screen === "download-prompt" && (
         <div className="screen">
           <div className="icon">⚡</div>
-          <h1>Setting Up AI Models</h1>
+          <h1>Download Word Selection AI</h1>
           <p className="subtitle">
-            {error
-              ? "Setup failed"
-              : `Downloading translation models... (${overallProgress}% complete)`}
+            Step 1 of 4: This AI intelligently selects words for you to learn
           </p>
 
           {!error && (
@@ -276,7 +381,50 @@ export default function Onboarding() {
                   />
                 </div>
               </div>
+            </div>
+          )}
 
+          <p className={`status ${error ? "error" : ""}`}>{status}</p>
+
+          {!error && progress.prompt === 0 && (
+            <button onClick={downloadPromptModel} className="primary-btn">
+              Start Download
+            </button>
+          )}
+
+          {!error && progress.prompt === 100 && (
+            <button onClick={() => setScreen("download-french")} className="primary-btn">
+              Next: Download French
+            </button>
+          )}
+
+          {error && (
+            <div className="error-box">
+              <p>{error}</p>
+              <button
+                onClick={() => {
+                  setError(null);
+                  setScreen("welcome");
+                }}
+                className="retry-btn"
+              >
+                Go Back
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {screen === "download-french" && (
+        <div className="screen">
+          <div className="icon">🇫🇷</div>
+          <h1>Download French Translator</h1>
+          <p className="subtitle">
+            Step 2 of 4: French translation model
+          </p>
+
+          {!error && (
+            <div className="progress-container">
               <div className="progress-item">
                 <div className="progress-header">
                   <span>🇫🇷 French Translation</span>
@@ -289,7 +437,50 @@ export default function Onboarding() {
                   />
                 </div>
               </div>
+            </div>
+          )}
 
+          <p className={`status ${error ? "error" : ""}`}>{status}</p>
+
+          {!error && progress.french === 0 && (
+            <button onClick={downloadFrenchModel} className="primary-btn">
+              Download French
+            </button>
+          )}
+
+          {!error && progress.french === 100 && (
+            <button onClick={() => setScreen("download-spanish")} className="primary-btn">
+              Next: Download Spanish
+            </button>
+          )}
+
+          {error && (
+            <div className="error-box">
+              <p>{error}</p>
+              <button
+                onClick={() => {
+                  setError(null);
+                  setScreen("download-prompt");
+                }}
+                className="retry-btn"
+              >
+                Go Back
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {screen === "download-spanish" && (
+        <div className="screen">
+          <div className="icon">🇪🇸</div>
+          <h1>Download Spanish Translator</h1>
+          <p className="subtitle">
+            Step 3 of 4: Spanish translation model
+          </p>
+
+          {!error && (
+            <div className="progress-container">
               <div className="progress-item">
                 <div className="progress-header">
                   <span>🇪🇸 Spanish Translation</span>
@@ -307,14 +498,83 @@ export default function Onboarding() {
 
           <p className={`status ${error ? "error" : ""}`}>{status}</p>
 
+          {!error && progress.spanish === 0 && (
+            <button onClick={downloadSpanishModel} className="primary-btn">
+              Download Spanish
+            </button>
+          )}
+
+          {!error && progress.spanish === 100 && (
+            <button onClick={() => setScreen("download-rewriter")} className="primary-btn">
+              Next: Download Rewriter
+            </button>
+          )}
+
           {error && (
             <div className="error-box">
               <p>{error}</p>
               <button
-                onClick={() => setScreen("welcome")}
+                onClick={() => {
+                  setError(null);
+                  setScreen("download-french");
+                }}
                 className="retry-btn"
               >
-                Try Again
+                Go Back
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {screen === "download-rewriter" && (
+        <div className="screen">
+          <div className="icon">✍️</div>
+          <h1>Download Text Rewriter</h1>
+          <p className="subtitle">
+            Step 4 of 4: AI-powered text simplification and rewriting
+          </p>
+
+          {!error && (
+            <div className="progress-container">
+              <div className="progress-item">
+                <div className="progress-header">
+                  <span>✍️ Text Rewriter</span>
+                  <span>{Math.round(progress.rewriter)}%</span>
+                </div>
+                <div className="progress-bar">
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${progress.rewriter}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <p className={`status ${error ? "error" : ""}`}>{status}</p>
+
+          {!error && progress.rewriter === 0 && (
+            <button onClick={downloadRewriterModel} className="primary-btn">
+              Download Rewriter
+            </button>
+          )}
+
+          {!error && progress.rewriter === 100 && (
+            <p className="status">Rewriter downloaded! Setup complete.</p>
+          )}
+
+          {error && (
+            <div className="error-box">
+              <p>{error}</p>
+              <button
+                onClick={() => {
+                  setError(null);
+                  setScreen("download-spanish");
+                }}
+                className="retry-btn"
+              >
+                Go Back
               </button>
             </div>
           )}

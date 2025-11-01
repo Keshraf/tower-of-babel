@@ -72,6 +72,16 @@ async function initializeAndTranslate(): Promise<void> {
     console.log("Page translation complete!");
   } catch (error) {
     console.error("Failed to initialize extension:", error);
+
+    // Check if this is a model download error
+    if (error instanceof Error && error.message.includes("not downloaded")) {
+      console.warn("⚠️  Models not fully downloaded. Please re-run onboarding.");
+      // Reset onboarding status so user is prompted to download again
+      const result = await chrome.storage.local.get("system");
+      const system = result.system || {};
+      system.onboardingComplete = false;
+      await chrome.storage.local.set({ system });
+    }
   }
 }
 

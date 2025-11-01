@@ -44,7 +44,7 @@ class TranslationService {
         // Initialize Prompt API for word selection
         onProgress?.(0, "Initializing word selection AI...");
         await promptService.initialize(this.config, (progress) => {
-          onProgress?.(progress * 0.5, "Downloading word selection model...");
+          onProgress?.(progress * 0.5, "Loading word selection model...");
         });
 
         // Initialize Translator API
@@ -55,13 +55,10 @@ class TranslationService {
           (progress) => {
             onProgress?.(
               50 + progress * 0.5,
-              "Downloading translation model..."
+              "Loading translation model..."
             );
           }
         );
-
-        // Mark language as downloaded
-        await storageService.setLanguageDownloaded(activeLanguage);
 
         onProgress?.(100, "Ready!");
         console.log("All translation services initialized successfully");

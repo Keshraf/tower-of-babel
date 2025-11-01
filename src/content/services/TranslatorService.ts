@@ -69,6 +69,16 @@ class TranslatorService {
         );
       }
 
+      // Check if model needs to be downloaded
+      // If it's "downloadable" or "downloading", we need a user gesture
+      // This typically means onboarding wasn't completed properly
+      if (availability === "downloadable" || availability === "downloading") {
+        throw new Error(
+          `Translator model for ${sourceLanguage} → ${targetLanguage} needs to be downloaded. Please complete onboarding or use a feature that provides user gesture.`
+        );
+      }
+
+      // At this point, availability should be "readily" - model is already downloaded
       // Create translator
       this.translator = await (self as any).Translator.create({
         sourceLanguage,

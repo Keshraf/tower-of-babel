@@ -61,10 +61,14 @@ class PromptService {
         throw new Error("Prompt API not available");
       }
 
-      if (availability === "downloading") {
-        console.log("Prompt API model downloading...");
+      // Check if model needs to be downloaded
+      if (availability === "downloadable" || availability === "downloading") {
+        throw new Error(
+          "Prompt API model needs to be downloaded. Please complete onboarding first."
+        );
       }
 
+      // At this point, availability should be "readily" - model is already downloaded
       const params = await (self as any).LanguageModel.params();
 
       this.session = await (self as any).LanguageModel.create({
