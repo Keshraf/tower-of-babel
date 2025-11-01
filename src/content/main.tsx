@@ -7,6 +7,7 @@ import { storageService } from "./services/StorageService";
 import { translatePage, stopTranslation } from "./translation/pageTranslator";
 import { clearTranslations } from "./translation/translationCleaner";
 import { setTooltipHandler } from "./translation/nodeTranslator";
+import { initializeSelectionHandler } from "./selectionHandler";
 import type { SupportedLanguage } from "./utils/translationConfig";
 import "./content.css";
 
@@ -51,6 +52,9 @@ async function initializeAndTranslate(): Promise<void> {
   console.log("Initializing translation extension...");
 
   try {
+    // Initialize selection handler for context menu translation
+    initializeSelectionHandler();
+
     // Initialize services
     await translationService.initialize((progress, stage) => {
       console.log(`[${progress.toFixed(0)}%] ${stage}`);

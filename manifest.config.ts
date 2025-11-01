@@ -20,6 +20,7 @@ export default defineManifest({
     "storage",
     "activeTab",
     "audioCapture",
+    "contextMenus",
   ],
   background: {
     service_worker: "src/background/service-worker.ts",
